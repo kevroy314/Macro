@@ -12,8 +12,8 @@ android {
         applicationId = "com.macropad.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.3"
+        versionCode = 4
+        versionName = "1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -88,6 +88,9 @@ dependencies {
 
     // Dropbox SDK
     implementation("com.dropbox.core:dropbox-core-sdk:5.4.5")
+
+    // OkHttp for network requests (proper SSL handling)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // WorkManager for background sync
     implementation("androidx.work:work-runtime-ktx:2.9.0")

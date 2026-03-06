@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import com.dropbox.core.DbxRequestConfig
-import com.dropbox.core.oauth.DbxCredential
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
 import com.google.gson.GsonBuilder
@@ -16,6 +15,9 @@ import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.WidgetSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -23,6 +25,7 @@ class DropboxManager(private val context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val httpClient = OkHttpClient()
 
     companion object {
         private const val PREFS_NAME = "dropbox_prefs"
@@ -35,6 +38,7 @@ class DropboxManager(private val context: Context) {
 
         private const val BACKUP_FILE = "/macropad_backup.json"
         private const val REDIRECT_URI = "macropad://oauth"
+        private const val TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
     }
 
     val isLinked: Boolean
@@ -77,23 +81,28 @@ class DropboxManager(private val context: Context) {
             // Clear it after retrieval
             prefs.edit().remove(KEY_CODE_VERIFIER).apply()
 
-            // Exchange code for token
-            val tokenUrl = "https://api.dropboxapi.com/oauth2/token"
-            val connection = java.net.URL(tokenUrl).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            // Exchange code for token using OkHttp
+            val formBody = FormBody.Builder()
+                .add("code", code)
+                .add("grant_type", "authorization_code")
+                .add("client_id", BuildConfig.DROPBOX_APP_KEY)
+                .add("redirect_uri", REDIRECT_URI)
+                .add("code_verifier", verifier)
+                .build()
 
-            val postData = "code=$code" +
-                    "&grant_type=authorization_code" +
-                    "&client_id=${BuildConfig.DROPBOX_APP_KEY}" +
-                    "&redirect_uri=$REDIRECT_URI" +
-                    "&code_verifier=$verifier"
+            val request = Request.Builder()
+                .url(TOKEN_URL)
+                .post(formBody)
+                .build()
 
-            connection.outputStream.use { it.write(postData.toByteArray()) }
+            val response = httpClient.newCall(request).execute()
+            val responseBody = response.body?.string() ?: return@withContext false
 
-            val response = connection.inputStream.bufferedReader().readText()
-            val tokenResponse = gson.fromJson(response, TokenResponse::class.java)
+            if (!response.isSuccessful) {
+                return@withContext false
+            }
+
+            val tokenResponse = gson.fromJson(responseBody, TokenResponse::class.java)
 
             // Save credentials
             prefs.edit()
@@ -136,26 +145,31 @@ class DropboxManager(private val context: Context) {
         }
 
         val currentToken = prefs.getString(KEY_ACCESS_TOKEN, null) ?: return@withContext null
-        val config = DbxRequestConfig.newBuilder("MacroPad/1.3").build()
+        val config = DbxRequestConfig.newBuilder("MacroPad/1.4").build()
         DbxClientV2(config, currentToken)
     }
 
     private suspend fun refreshAccessToken(refreshToken: String) = withContext(Dispatchers.IO) {
         try {
-            val tokenUrl = "https://api.dropboxapi.com/oauth2/token"
-            val connection = java.net.URL(tokenUrl).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            val formBody = FormBody.Builder()
+                .add("grant_type", "refresh_token")
+                .add("refresh_token", refreshToken)
+                .add("client_id", BuildConfig.DROPBOX_APP_KEY)
+                .build()
 
-            val postData = "grant_type=refresh_token" +
-                    "&refresh_token=$refreshToken" +
-                    "&client_id=${BuildConfig.DROPBOX_APP_KEY}"
+            val request = Request.Builder()
+                .url(TOKEN_URL)
+                .post(formBody)
+                .build()
 
-            connection.outputStream.use { it.write(postData.toByteArray()) }
+            val response = httpClient.newCall(request).execute()
+            val responseBody = response.body?.string() ?: return@withContext
 
-            val response = connection.inputStream.bufferedReader().readText()
-            val tokenResponse = gson.fromJson(response, TokenResponse::class.java)
+            if (!response.isSuccessful) {
+                return@withContext
+            }
+
+            val tokenResponse = gson.fromJson(responseBody, TokenResponse::class.java)
 
             prefs.edit()
                 .putString(KEY_ACCESS_TOKEN, tokenResponse.access_token)
