@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MacroPad</string>
+    <string name="macro_status_widget_name">Macro Status</string>
+    <string name="macro_status_widget_description">Shows today\'s macro totals</string>
+    <string name="increment_widget_name">Quick Add</string>
+    <string name="increment_widget_description">Quick macro increment buttons</string>
+    <string name="preset_widget_name">Presets</string>
+    <string name="preset_widget_description">Apply macro presets</string>
+</resources>

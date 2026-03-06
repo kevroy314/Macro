@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- M letter for MacroPad -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,72 L30,36 L42,54 L54,36 L54,72 L48,72 L48,48 L42,58 L36,48 L36,72 Z"/>
+    <!-- P letter for Protein -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,72 L60,36 L72,36 Q78,36 78,42 L78,48 Q78,54 72,54 L66,54 L66,72 Z M66,42 L66,48 L70,48 Q72,48 72,46 L72,44 Q72,42 70,42 Z"/>
+</vector>
