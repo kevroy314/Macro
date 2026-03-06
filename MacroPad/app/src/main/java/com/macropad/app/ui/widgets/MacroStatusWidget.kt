@@ -41,18 +41,15 @@ class MacroStatusWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val todayMacros: DailyMacro
-        val target: MacroTarget
-
-        try {
+        val (todayMacros, target) = try {
             val app = context.applicationContext as MacroPadApplication
             val repository = app.repository
-            todayMacros = repository.getTodayMacros() ?: DailyMacro(date = DailyMacro.today())
-            target = repository.getTarget()
+            val macros = repository.getTodayMacros() ?: DailyMacro(date = DailyMacro.today())
+            val tgt = repository.getTarget()
+            Pair(macros, tgt)
         } catch (e: Exception) {
             // Fallback to defaults if database access fails
-            todayMacros = DailyMacro(date = DailyMacro.today())
-            target = MacroTarget()
+            Pair(DailyMacro(date = DailyMacro.today()), MacroTarget())
         }
 
         provideContent {
