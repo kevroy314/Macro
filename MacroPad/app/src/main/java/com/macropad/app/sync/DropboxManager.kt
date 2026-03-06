@@ -31,12 +31,10 @@ class DropboxManager(private val context: Context) {
         private const val KEY_EXPIRES_AT = "expires_at"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_ACCOUNT_EMAIL = "account_email"
+        private const val KEY_CODE_VERIFIER = "code_verifier"
 
         private const val BACKUP_FILE = "/macropad_backup.json"
         private const val REDIRECT_URI = "macropad://oauth"
-
-        // PKCE code verifier stored temporarily during auth
-        private var codeVerifier: String? = null
     }
 
     val isLinked: Boolean
@@ -53,8 +51,10 @@ class DropboxManager(private val context: Context) {
      */
     fun startAuth(): Intent {
         // Generate PKCE code verifier and challenge
-        codeVerifier = generateCodeVerifier()
-        val codeChallenge = generateCodeChallenge(codeVerifier!!)
+        val verifier = generateCodeVerifier()
+        // Persist the code verifier so it survives app process death
+        prefs.edit().putString(KEY_CODE_VERIFIER, verifier).apply()
+        val codeChallenge = generateCodeChallenge(verifier)
 
         val authUrl = "https://www.dropbox.com/oauth2/authorize" +
                 "?client_id=${BuildConfig.DROPBOX_APP_KEY}" +
@@ -72,8 +72,10 @@ class DropboxManager(private val context: Context) {
      */
     suspend fun handleAuthCallback(code: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val verifier = codeVerifier ?: return@withContext false
-            codeVerifier = null
+            // Retrieve persisted code verifier
+            val verifier = prefs.getString(KEY_CODE_VERIFIER, null) ?: return@withContext false
+            // Clear it after retrieval
+            prefs.edit().remove(KEY_CODE_VERIFIER).apply()
 
             // Exchange code for token
             val tokenUrl = "https://api.dropboxapi.com/oauth2/token"
