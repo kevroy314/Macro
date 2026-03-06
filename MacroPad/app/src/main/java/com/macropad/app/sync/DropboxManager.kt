@@ -136,7 +136,7 @@ class DropboxManager(private val context: Context) {
         }
 
         val currentToken = prefs.getString(KEY_ACCESS_TOKEN, null) ?: return@withContext null
-        val config = DbxRequestConfig.newBuilder("MacroPad/1.2").build()
+        val config = DbxRequestConfig.newBuilder("MacroPad/1.3").build()
         DbxClientV2(config, currentToken)
     }
 

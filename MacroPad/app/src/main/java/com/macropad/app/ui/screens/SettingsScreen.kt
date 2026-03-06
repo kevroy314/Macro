@@ -566,7 +566,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "MacroPad v1.2",
+                    text = "MacroPad v1.3",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
