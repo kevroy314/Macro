@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0a0a14"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="500" fill="url(#bg)"/>
+
+  <!-- App name -->
+  <text x="512" y="120" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#E0E0E0" text-anchor="middle">MacroPad</text>
+
+  <!-- Tagline -->
+  <text x="512" y="170" font-family="Arial, sans-serif" font-size="28" fill="#9CA3AF" text-anchor="middle">Fast macro tracking with home screen widgets</text>
+
+  <!-- Widget mockup - Status widget -->
+  <rect x="120" y="220" width="240" height="200" rx="16" fill="#1a1a2e" stroke="#333" stroke-width="2"/>
+  <text x="140" y="260" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#A78BFA">Today</text>
+
+  <text x="140" y="295" font-family="Arial, sans-serif" font-size="16" fill="#9CA3AF">P</text>
+  <text x="165" y="295" font-family="Arial, sans-serif" font-size="16" fill="#4ADE80">120/180</text>
+
+  <text x="140" y="325" font-family="Arial, sans-serif" font-size="16" fill="#9CA3AF">C</text>
+  <text x="165" y="325" font-family="Arial, sans-serif" font-size="16" fill="#22D3EE">200/250</text>
+
+  <text x="140" y="355" font-family="Arial, sans-serif" font-size="16" fill="#9CA3AF">F</text>
+  <text x="165" y="355" font-family="Arial, sans-serif" font-size="16" fill="#FBBF24">65/80</text>
+
+  <text x="300" y="400" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#F472B6" text-anchor="end">1845 cal</text>
+
+  <!-- Widget mockup - Increment widget -->
+  <rect x="400" y="220" width="220" height="200" rx="16" fill="#1a1a2e" stroke="#333" stroke-width="2"/>
+
+  <!-- P column -->
+  <text x="445" y="260" font-family="Arial, sans-serif" font-size="14" fill="#9CA3AF" text-anchor="middle">P</text>
+  <rect x="420" y="270" width="50" height="35" rx="6" fill="#4ADE80"/>
+  <text x="445" y="295" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#0a0a14" text-anchor="middle">+5</text>
+  <rect x="420" y="315" width="50" height="35" rx="6" fill="#2D6B47"/>
+  <text x="445" y="340" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#E0E0E0" text-anchor="middle">-1</text>
+
+  <!-- C column -->
+  <text x="510" y="260" font-family="Arial, sans-serif" font-size="14" fill="#9CA3AF" text-anchor="middle">C</text>
+  <rect x="485" y="270" width="50" height="35" rx="6" fill="#22D3EE"/>
+  <text x="510" y="295" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#0a0a14" text-anchor="middle">+5</text>
+  <rect x="485" y="315" width="50" height="35" rx="6" fill="#1A6B7C"/>
+  <text x="510" y="340" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#E0E0E0" text-anchor="middle">-1</text>
+
+  <!-- F column -->
+  <text x="575" y="260" font-family="Arial, sans-serif" font-size="14" fill="#9CA3AF" text-anchor="middle">F</text>
+  <rect x="550" y="270" width="50" height="35" rx="6" fill="#FBBF24"/>
+  <text x="575" y="295" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#0a0a14" text-anchor="middle">+5</text>
+  <rect x="550" y="315" width="50" height="35" rx="6" fill="#7B5F14"/>
+  <text x="575" y="340" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#E0E0E0" text-anchor="middle">-1</text>
+
+  <!-- Widget mockup - Preset widget -->
+  <rect x="660" y="220" width="240" height="200" rx="16" fill="#1a1a2e" stroke="#333" stroke-width="2"/>
+  <text x="680" y="260" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#A78BFA">Presets</text>
+
+  <rect x="680" y="275" width="200" height="40" rx="8" fill="#252530"/>
+  <text x="695" y="302" font-family="Arial, sans-serif" font-size="14" fill="#E0E0E0">Chicken Breast</text>
+  <text x="860" y="302" font-family="Arial, sans-serif" font-size="12" fill="#4ADE80" text-anchor="end">P30</text>
+
+  <rect x="680" y="325" width="200" height="40" rx="8" fill="#252530"/>
+  <text x="695" y="352" font-family="Arial, sans-serif" font-size="14" fill="#E0E0E0">Protein Shake</text>
+  <text x="860" y="352" font-family="Arial, sans-serif" font-size="12" fill="#4ADE80" text-anchor="end">P25</text>
+
+  <rect x="680" y="375" width="200" height="40" rx="8" fill="#252530"/>
+  <text x="695" y="402" font-family="Arial, sans-serif" font-size="14" fill="#E0E0E0">Greek Yogurt</text>
+  <text x="860" y="402" font-family="Arial, sans-serif" font-size="12" fill="#4ADE80" text-anchor="end">P15</text>
+
+  <!-- Decorative elements -->
+  <circle cx="80" cy="80" r="40" fill="#4ADE80" opacity="0.1"/>
+  <circle cx="944" cy="420" r="60" fill="#A78BFA" opacity="0.1"/>
+</svg>
