@@ -15,6 +15,8 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MacroPadApplication
 import com.macropad.app.data.entity.MacroPreset
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Widget colors matching the app theme
 private val WidgetBackground = Color(0xFF0A0A0A)
@@ -133,14 +135,17 @@ class ApplyPresetAction : ActionCallback {
             val presetId = parameters[ActionParameters.Key<Long>("presetId")] ?: return
 
             val app = context.applicationContext as MacroPadApplication
-            val preset = app.repository.getPresetById(presetId) ?: return
 
-            app.repository.applyPreset(preset)
+            // Perform database operations on IO dispatcher and ensure they complete
+            withContext(Dispatchers.IO) {
+                val preset = app.repository.getPresetById(presetId) ?: return@withContext
+                app.repository.applyPreset(preset)
+            }
 
-            // Update all widgets
-            MacroStatusWidget().updateAll(context)
-            IncrementWidget().updateAll(context)
-            PresetWidget().updateAll(context)
+            // Force update MacroStatusWidget using state-based update mechanism
+            // This changes the widget's preferences state, which forces Glance to
+            // recognize a state change and re-run provideGlance with fresh data
+            MacroStatusWidget.forceUpdateAll(context)
         } catch (e: Exception) {
             // Silently fail - widget will show stale data until next update
         }

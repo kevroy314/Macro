@@ -1,9 +1,7 @@
 package com.macropad.app.ui.screens
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,9 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.macropad.app.MacroPadApplication
@@ -30,7 +31,6 @@ import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
 import com.macropad.app.sync.BackupData
-import com.macropad.app.sync.DropboxAuthActivity
 import com.macropad.app.sync.SyncResult
 import com.macropad.app.sync.SyncWorker
 import kotlinx.coroutines.flow.Flow
@@ -76,29 +76,41 @@ fun SettingsScreen(
     var lastSyncTime by remember { mutableStateOf(app.dropboxManager.lastSyncTime) }
 
     val scrollState = rememberScrollState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Listen for auth completion
-    DisposableEffect(Unit) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                val success = intent?.getBooleanExtra(DropboxAuthActivity.EXTRA_SUCCESS, false) ?: false
-                if (success) {
+    // Check Dropbox auth state when screen resumes (after returning from browser auth)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val wasLinked = isDropboxLinked
+                val nowLinked = app.dropboxManager.isLinked
+
+                if (!wasLinked && nowLinked) {
+                    // Just connected
                     isDropboxLinked = true
                     dropboxEmail = app.dropboxManager.accountEmail
                     dropboxStatus = "Connected to Dropbox!"
+                    lastSyncTime = app.dropboxManager.lastSyncTime
 
                     // Enable auto-sync by default when linking
                     val currentSync = syncSettings ?: SyncSettings()
                     onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
-                    SyncWorker.scheduleDailySync(context!!)
+                    SyncWorker.scheduleDailySync(context)
+                } else if (wasLinked && !nowLinked) {
+                    // Disconnected externally
+                    isDropboxLinked = false
+                    dropboxEmail = null
                 } else {
-                    dropboxStatus = "Failed to connect to Dropbox"
+                    // Update state in case email/sync time changed
+                    isDropboxLinked = nowLinked
+                    dropboxEmail = app.dropboxManager.accountEmail
+                    lastSyncTime = app.dropboxManager.lastSyncTime
                 }
             }
         }
-        context.registerReceiver(receiver, IntentFilter(DropboxAuthActivity.ACTION_AUTH_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            context.unregisterReceiver(receiver)
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -426,6 +438,52 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Day Reset Time Section
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Schedule, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Day Reset Time",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = { showWidgetDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Day Reset Time")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val resetSettings = widgetSettings ?: WidgetSettings()
+                val resetHour = resetSettings.dayResetHour
+                val displayTime = if (resetHour == 0) "Midnight (12:00 AM)" else {
+                    val hour12 = if (resetHour > 12) resetHour - 12 else if (resetHour == 0) 12 else resetHour
+                    val amPm = if (resetHour < 12) "AM" else "PM"
+                    "$hour12:00 $amPm"
+                }
+
+                Text(
+                    text = "New day starts at: $displayTime",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "Tracking resets at this hour each day",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Export Section
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -566,7 +624,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "MacroPad v1.4",
+                    text = "MacroPad v2.0",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
@@ -859,12 +917,38 @@ fun WidgetSettingsDialog(
     var proteinDec by remember { mutableStateOf(settings.proteinDecrement.toString()) }
     var carbsDec by remember { mutableStateOf(settings.carbsDecrement.toString()) }
     var fatDec by remember { mutableStateOf(settings.fatDecrement.toString()) }
+    var dayResetHour by remember { mutableStateOf(settings.dayResetHour.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Widget Button Values") },
+        title = { Text("App Settings") },
         text = {
             Column {
+                // Day Reset Hour
+                Text(
+                    text = "Day Reset Time",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Hour when the day resets (0-23). E.g., 5 = 5am",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dayResetHour,
+                    onValueChange = {
+                        val filtered = it.filter { c -> c.isDigit() }
+                        val value = filtered.toIntOrNull() ?: 0
+                        if (value in 0..23) dayResetHour = filtered
+                    },
+                    label = { Text("Hour (0-23)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
                     text = "Increment (+) Values",
                     style = MaterialTheme.typography.labelMedium,
@@ -940,7 +1024,8 @@ fun WidgetSettingsDialog(
                             fatIncrement = fatInc.toIntOrNull() ?: 5,
                             proteinDecrement = proteinDec.toIntOrNull() ?: 1,
                             carbsDecrement = carbsDec.toIntOrNull() ?: 1,
-                            fatDecrement = fatDec.toIntOrNull() ?: 1
+                            fatDecrement = fatDec.toIntOrNull() ?: 1,
+                            dayResetHour = dayResetHour.toIntOrNull()?.coerceIn(0, 23) ?: 0
                         )
                     )
                 }
@@ -987,7 +1072,8 @@ private fun buildJsonExport(
             "fatIncrement" to widgetSettings.fatIncrement,
             "proteinDecrement" to widgetSettings.proteinDecrement,
             "carbsDecrement" to widgetSettings.carbsDecrement,
-            "fatDecrement" to widgetSettings.fatDecrement
+            "fatDecrement" to widgetSettings.fatDecrement,
+            "dayResetHour" to widgetSettings.dayResetHour
         ),
         "presets" to presets.map { preset ->
             mapOf(
@@ -1042,7 +1128,8 @@ private fun parseImportJson(json: String): ImportResult {
             fatIncrement = (widgetSettingsMap["fatIncrement"] as? Double)?.toInt() ?: 5,
             proteinDecrement = (widgetSettingsMap["proteinDecrement"] as? Double)?.toInt() ?: 1,
             carbsDecrement = (widgetSettingsMap["carbsDecrement"] as? Double)?.toInt() ?: 1,
-            fatDecrement = (widgetSettingsMap["fatDecrement"] as? Double)?.toInt() ?: 1
+            fatDecrement = (widgetSettingsMap["fatDecrement"] as? Double)?.toInt() ?: 1,
+            dayResetHour = (widgetSettingsMap["dayResetHour"] as? Double)?.toInt()?.coerceIn(0, 23) ?: 0
         )
     } else null
 

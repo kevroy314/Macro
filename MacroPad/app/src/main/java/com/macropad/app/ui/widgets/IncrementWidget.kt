@@ -15,6 +15,8 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MacroPadApplication
 import com.macropad.app.data.entity.WidgetSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Widget colors matching the app theme
 private val WidgetBackground = Color(0xFF0A0A0A)
@@ -201,12 +203,16 @@ class AddMacroAction : ActionCallback {
             val fat = parameters[ActionParameters.Key<Int>("fat")] ?: 0
 
             val app = context.applicationContext as MacroPadApplication
-            app.repository.addMacros(protein, carbs, fat)
 
-            // Update all widgets
-            MacroStatusWidget().updateAll(context)
-            IncrementWidget().updateAll(context)
-            PresetWidget().updateAll(context)
+            // Perform database operation on IO dispatcher and ensure it completes
+            withContext(Dispatchers.IO) {
+                app.repository.addMacros(protein, carbs, fat)
+            }
+
+            // Force update MacroStatusWidget using state-based update mechanism
+            // This changes the widget's preferences state, which forces Glance to
+            // recognize a state change and re-run provideGlance with fresh data
+            MacroStatusWidget.forceUpdateAll(context)
         } catch (e: Exception) {
             // Silently fail - widget will show stale data until next update
         }

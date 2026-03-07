@@ -23,4 +23,10 @@ interface MacroEntryDao {
 
     @Query("DELETE FROM macro_entries WHERE date = :date")
     suspend fun deleteAllForDate(date: String)
+
+    @Query("SELECT * FROM macro_entries WHERE date = :date ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLastEntryForDate(date: String): MacroEntry?
+
+    @Query("DELETE FROM macro_entries WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

@@ -1,7 +1,7 @@
 package com.macropad.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,13 +13,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.macropad.app.data.entity.DailyMacro
+import com.macropad.app.data.entity.MacroEntry
 import com.macropad.app.data.entity.MacroPreset
 import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.WidgetSettings
+import kotlinx.coroutines.launch
 import com.macropad.app.ui.components.MacroProgressBar
 import com.macropad.app.ui.theme.*
 import kotlinx.coroutines.flow.Flow
@@ -34,9 +38,10 @@ fun DashboardScreen(
     presetsFlow: Flow<List<MacroPreset>>,
     widgetSettingsFlow: Flow<WidgetSettings?>,
     onAddMacros: (protein: Int, carbs: Int, fat: Int) -> Unit,
+    onSetMacros: (protein: Int, carbs: Int, fat: Int) -> Unit,
     onApplyPreset: (MacroPreset) -> Unit,
-    onEditMacros: () -> Unit,
-    onEditAnnotation: (String) -> Unit
+    onEditAnnotation: (String) -> Unit,
+    onUndo: suspend () -> MacroEntry?
 ) {
     val todayMacros by todayMacrosFlow.collectAsState(initial = null)
     val target by targetFlow.collectAsState(initial = MacroTarget())
@@ -44,9 +49,12 @@ fun DashboardScreen(
     val widgetSettings by widgetSettingsFlow.collectAsState(initial = WidgetSettings())
 
     var showAddDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
     var showAnnotationDialog by remember { mutableStateOf(false) }
+    var undoMessage by remember { mutableStateOf<String?>(null) }
 
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     val currentTarget = target ?: MacroTarget()
     val macros = todayMacros ?: DailyMacro(date = DailyMacro.today())
@@ -180,6 +188,73 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Action Buttons (Add/Edit/Note/Undo)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            OutlinedButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Add")
+            }
+            OutlinedButton(onClick = { showEditDialog = true }) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Edit")
+            }
+            OutlinedButton(onClick = { showAnnotationDialog = true }) {
+                Icon(Icons.Default.Note, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Note")
+            }
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        val undone = onUndo()
+                        undoMessage = if (undone != null) {
+                            "Undid: P${undone.proteinG} C${undone.carbsG} F${undone.fatG}"
+                        } else {
+                            "Nothing to undo"
+                        }
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 12.dp)
+            ) {
+                Icon(Icons.Default.Undo, contentDescription = "Undo", modifier = Modifier.size(18.dp))
+            }
+        }
+
+        // Undo feedback message
+        undoMessage?.let { message ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    IconButton(
+                        onClick = { undoMessage = null },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Quick Add - Widget Style (+/- per macro)
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -267,30 +342,6 @@ fun DashboardScreen(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Action Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            OutlinedButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Add")
-            }
-            OutlinedButton(onClick = onEditMacros) {
-                Icon(Icons.Default.Edit, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Edit")
-            }
-            OutlinedButton(onClick = { showAnnotationDialog = true }) {
-                Icon(Icons.Default.Note, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Note")
-            }
-        }
     }
 
     // Add Macros Dialog
@@ -300,6 +351,20 @@ fun DashboardScreen(
             onConfirm = { p, c, f ->
                 onAddMacros(p, c, f)
                 showAddDialog = false
+            }
+        )
+    }
+
+    // Edit Macros Dialog
+    if (showEditDialog) {
+        EditMacrosDialog(
+            currentProtein = macros.proteinG,
+            currentCarbs = macros.carbsG,
+            currentFat = macros.fatG,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { p, c, f ->
+                onSetMacros(p, c, f)
+                showEditDialog = false
             }
         )
     }
@@ -341,14 +406,13 @@ fun QuickAddColumn(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // + button
-        Box(
+        // + button with long-press repeat
+        RepeatingButton(
+            onClick = onIncrement,
             modifier = Modifier
                 .size(56.dp, 36.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(color)
-                .clickable { onIncrement() },
-            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "+$increment",
@@ -360,14 +424,13 @@ fun QuickAddColumn(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // - button
-        Box(
+        // - button with long-press repeat
+        RepeatingButton(
+            onClick = onDecrement,
             modifier = Modifier
                 .size(56.dp, 36.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(dimColor)
-                .clickable { onDecrement() },
-            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "-$decrement",
@@ -377,6 +440,43 @@ fun QuickAddColumn(
             )
         }
     }
+}
+
+@Composable
+fun RepeatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    initialDelayMs: Long = 500L,
+    repeatDelayMs: Long = 100L,
+    content: @Composable BoxScope.() -> Unit
+) {
+    var isPressed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            onClick() // Initial click
+            delay(initialDelayMs) // Wait before repeating
+            while (isPressed) {
+                onClick()
+                delay(repeatDelayMs)
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        tryAwaitRelease()
+                        isPressed = false
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
 }
 
 @Composable
@@ -426,6 +526,79 @@ fun AddMacrosDialog(
                 }
             ) {
                 Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditMacrosDialog(
+    currentProtein: Int,
+    currentCarbs: Int,
+    currentFat: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (protein: Int, carbs: Int, fat: Int) -> Unit
+) {
+    var protein by remember { mutableStateOf(currentProtein.toString()) }
+    var carbs by remember { mutableStateOf(currentCarbs.toString()) }
+    var fat by remember { mutableStateOf(currentFat.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Macros") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = protein,
+                    onValueChange = { protein = it.filter { c -> c.isDigit() } },
+                    label = { Text("Protein (g)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = carbs,
+                    onValueChange = { carbs = it.filter { c -> c.isDigit() } },
+                    label = { Text("Carbs (g)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fat,
+                    onValueChange = { fat = it.filter { c -> c.isDigit() } },
+                    label = { Text("Fat (g)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Show calculated calories
+                val calories = (protein.toIntOrNull() ?: 0) * 4 +
+                        (carbs.toIntOrNull() ?: 0) * 4 +
+                        (fat.toIntOrNull() ?: 0) * 9
+                Text(
+                    text = "Calories: $calories",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = CaloriesColor
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        protein.toIntOrNull() ?: 0,
+                        carbs.toIntOrNull() ?: 0,
+                        fat.toIntOrNull() ?: 0
+                    )
+                }
+            ) {
+                Text("Save")
             }
         },
         dismissButton = {

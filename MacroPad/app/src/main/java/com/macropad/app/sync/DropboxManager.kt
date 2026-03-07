@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import com.dropbox.core.DbxRequestConfig
+import com.dropbox.core.http.OkHttp3Requestor
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
 import com.google.gson.GsonBuilder
@@ -25,7 +26,7 @@ class DropboxManager(private val context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val gson = GsonBuilder().setPrettyPrinting().create()
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder().build()
 
     companion object {
         private const val PREFS_NAME = "dropbox_prefs"
@@ -135,7 +136,6 @@ class DropboxManager(private val context: Context) {
      * Get Dropbox client, refreshing token if needed
      */
     private suspend fun getClient(): DbxClientV2? = withContext(Dispatchers.IO) {
-        val accessToken = prefs.getString(KEY_ACCESS_TOKEN, null) ?: return@withContext null
         val refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null)
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0)
 
@@ -145,7 +145,11 @@ class DropboxManager(private val context: Context) {
         }
 
         val currentToken = prefs.getString(KEY_ACCESS_TOKEN, null) ?: return@withContext null
-        val config = DbxRequestConfig.newBuilder("MacroPad/1.4").build()
+
+        // Use OkHttp3Requestor to ensure proper SSL handling on Android
+        val config = DbxRequestConfig.newBuilder("MacroPad/1.5")
+            .withHttpRequestor(OkHttp3Requestor(httpClient))
+            .build()
         DbxClientV2(config, currentToken)
     }
 

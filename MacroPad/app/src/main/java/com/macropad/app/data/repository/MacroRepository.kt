@@ -15,6 +15,7 @@ import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
 import com.macropad.app.sync.BackupData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 
@@ -26,25 +27,42 @@ class MacroRepository(
     private val macroEntryDao: MacroEntryDao,
     private val syncSettingsDao: SyncSettingsDao
 ) {
-    // Daily Macros
-    fun getTodayMacrosFlow(): Flow<DailyMacro?> = dailyMacroDao.getByDateFlow(DailyMacro.today())
+    // Helper to get today's date with reset hour adjustment
+    private suspend fun getTodayDate(): String {
+        val settings = widgetSettingsDao.getSettings()
+        return DailyMacro.today(settings?.dayResetHour ?: 0)
+    }
+
+    // Public version for callers that need the adjusted date
+    suspend fun getAdjustedTodayDate(): String = getTodayDate()
+
+    // Sync version for flows (uses default, will update when settings change)
+    private fun getTodayDateSync(dayResetHour: Int = 0): String = DailyMacro.today(dayResetHour)
+
+    // Daily Macros - reacts to dayResetHour changes
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun getTodayMacrosFlow(): Flow<DailyMacro?> =
+        widgetSettingsDao.getSettingsFlow().flatMapLatest { settings ->
+            val today = getTodayDateSync(settings?.dayResetHour ?: 0)
+            dailyMacroDao.getByDateFlow(today)
+        }
 
     fun getAllMacrosFlow(): Flow<List<DailyMacro>> = dailyMacroDao.getAllFlow()
 
     fun getMacrosInRange(startDate: LocalDate, endDate: LocalDate): Flow<List<DailyMacro>> =
         dailyMacroDao.getInRange(startDate.toString(), endDate.toString())
 
-    suspend fun getTodayMacros(): DailyMacro? = dailyMacroDao.getByDate(DailyMacro.today())
+    suspend fun getTodayMacros(): DailyMacro? = dailyMacroDao.getByDate(getTodayDate())
 
     suspend fun getOrCreateToday(): DailyMacro {
-        val today = DailyMacro.today()
+        val today = getTodayDate()
         return dailyMacroDao.getByDate(today) ?: DailyMacro(date = today).also {
             dailyMacroDao.upsert(it)
         }
     }
 
     suspend fun addMacros(protein: Int = 0, carbs: Int = 0, fat: Int = 0, source: String = "manual") {
-        val today = DailyMacro.today()
+        val today = getTodayDate()
 
         // Record the entry for history tracking
         macroEntryDao.insert(
@@ -67,7 +85,7 @@ class MacroRepository(
     }
 
     suspend fun setMacros(protein: Int, carbs: Int, fat: Int) {
-        val today = DailyMacro.today()
+        val today = getTodayDate()
         val existing = dailyMacroDao.getByDate(today)
         dailyMacroDao.upsert(
             existing?.copy(proteinG = protein, carbsG = carbs, fatG = fat, updatedAt = System.currentTimeMillis())
@@ -91,8 +109,12 @@ class MacroRepository(
     }
 
     // Macro Entries (individual additions)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun getTodayEntriesFlow(): Flow<List<MacroEntry>> =
-        macroEntryDao.getEntriesForDateFlow(DailyMacro.today())
+        widgetSettingsDao.getSettingsFlow().flatMapLatest { settings ->
+            val today = getTodayDateSync(settings?.dayResetHour ?: 0)
+            macroEntryDao.getEntriesForDateFlow(today)
+        }
 
     fun getEntriesForDateFlow(date: String): Flow<List<MacroEntry>> =
         macroEntryDao.getEntriesForDateFlow(date)
@@ -179,6 +201,28 @@ class MacroRepository(
     }
 
     suspend fun getAllEntries(): List<MacroEntry> = macroEntryDao.getAll()
+
+    /**
+     * Undo the last macro entry for today.
+     * Returns the entry that was undone, or null if there was nothing to undo.
+     */
+    suspend fun undoLastEntry(): MacroEntry? {
+        val today = getTodayDate()
+        val lastEntry = macroEntryDao.getLastEntryForDate(today) ?: return null
+
+        // Delete the entry
+        macroEntryDao.deleteById(lastEntry.id)
+
+        // Subtract from daily totals
+        dailyMacroDao.addMacros(today, -lastEntry.proteinG, -lastEntry.carbsG, -lastEntry.fatG)
+
+        return lastEntry
+    }
+
+    /**
+     * Get the last entry for today (for showing undo info)
+     */
+    suspend fun getLastTodayEntry(): MacroEntry? = macroEntryDao.getLastEntryForDate(getTodayDate())
 
     // Presets
     fun getAllPresetsFlow(): Flow<List<MacroPreset>> = presetDao.getAllFlow()

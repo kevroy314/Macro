@@ -3,6 +3,8 @@ package com.macropad.app.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -60,159 +62,174 @@ fun HistoryScreen(
         if (!macro.annotation.isNullOrBlank()) index to macro else null
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         // Time Range Selector
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            TimeRange.entries.forEach { range ->
-                FilterChip(
-                    selected = selectedRange == range,
-                    onClick = { selectedRange = range },
-                    label = { Text(range.label) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Chart with clickable annotations
-        if (filteredMacros.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Macro Trends",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                TimeRange.entries.forEach { range ->
+                    FilterChip(
+                        selected = selectedRange == range,
+                        onClick = { selectedRange = range },
+                        label = { Text(range.label) }
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SimpleLineChartWithAnnotations(
-                        macros = filteredMacros,
-                        macrosWithNotes = macrosWithNotes,
-                        onNoteClick = { macro -> showNotePopup = macro },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Legend
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        LegendItem("Protein", ProteinColor)
-                        LegendItem("Carbs", CarbsColor)
-                        LegendItem("Fat", FatColor)
-                        if (macrosWithNotes.isNotEmpty()) {
-                            LegendItem("Note", Accent)
-                        }
-                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Chart with clickable annotations
+        if (filteredMacros.isNotEmpty()) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Macro Trends",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        SimpleLineChartWithAnnotations(
+                            macros = filteredMacros,
+                            macrosWithNotes = macrosWithNotes,
+                            onNoteClick = { macro -> showNotePopup = macro },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Legend
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            LegendItem("Protein", ProteinColor)
+                            LegendItem("Carbs", CarbsColor)
+                            LegendItem("Fat", FatColor)
+                            if (macrosWithNotes.isNotEmpty()) {
+                                LegendItem("Note", Accent)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
 
         // Burnup Chart Section (for selected day)
         selectedDayForBurnup?.let { selectedMacro ->
-            val groupedEntries by getGroupedEntries(selectedMacro.date).collectAsState(initial = emptyList())
+            item(key = "burnup_${selectedMacro.date}") {
+                val groupedEntries by getGroupedEntries(selectedMacro.date).collectAsState(initial = emptyList())
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Daily Burnup - ${LocalDate.parse(selectedMacro.date).format(DateTimeFormatter.ofPattern("MMM d"))}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        TextButton(onClick = { selectedDayForBurnup = null }) {
-                            Text("Close")
-                        }
-                    }
-
-                    if (groupedEntries.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        BurnupChart(
-                            groups = groupedEntries,
-                            target = target ?: MacroTarget(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Entry log
-                        Text(
-                            text = "Entries (${groupedEntries.size} groups)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        groupedEntries.forEach { group ->
-                            val time = Instant.ofEpochMilli(group.startTime)
-                                .atZone(ZoneId.systemDefault())
-                                .format(DateTimeFormatter.ofPattern("h:mm a"))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "$time: P+${group.totalProtein} C+${group.totalCarbs} F+${group.totalFat}",
+                                text = "Daily Burnup - ${LocalDate.parse(selectedMacro.date).format(DateTimeFormatter.ofPattern("MMM d"))}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(onClick = { selectedDayForBurnup = null }) {
+                                Text("Close")
+                            }
+                        }
+
+                        if (groupedEntries.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            BurnupChart(
+                                groups = groupedEntries,
+                                target = target ?: MacroTarget(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Entry log - show up to 10 entries, scrollable if more
+                            Text(
+                                text = "Entries (${groupedEntries.size} groups)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            val scrollState = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 150.dp)
+                                    .verticalScroll(scrollState)
+                            ) {
+                                groupedEntries.forEach { group ->
+                                    val time = Instant.ofEpochMilli(group.startTime)
+                                        .atZone(ZoneId.systemDefault())
+                                        .format(DateTimeFormatter.ofPattern("h:mm a"))
+                                    Text(
+                                        text = "$time: P+${group.totalProtein} C+${group.totalCarbs} F+${group.totalFat}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No entry data available for this day",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    } else {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "No entry data available for this day",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
 
-        // History List
-        Text(
-            text = "Daily Log",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Tap a day to see burnup chart",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // History List Header
+        item {
+            Text(
+                text = "Daily Log",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Tap a day to see burnup chart",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
-        LazyColumn {
-            items(filteredMacros.reversed()) { macro ->
-                DayCard(
-                    macro = macro,
-                    target = target ?: MacroTarget(),
-                    isSelected = selectedDayForBurnup?.date == macro.date,
-                    onEditAnnotation = { showAnnotationDialog = macro },
-                    onSelectForBurnup = {
-                        selectedDayForBurnup = if (selectedDayForBurnup?.date == macro.date) null else macro
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+        // Daily log items
+        items(filteredMacros.reversed(), key = { it.date }) { macro ->
+            DayCard(
+                macro = macro,
+                target = target ?: MacroTarget(),
+                isSelected = selectedDayForBurnup?.date == macro.date,
+                onEditAnnotation = { showAnnotationDialog = macro },
+                onSelectForBurnup = {
+                    selectedDayForBurnup = if (selectedDayForBurnup?.date == macro.date) null else macro
+                }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 

@@ -115,19 +115,29 @@ fun MainScreen(repository: MacroRepository) {
                             updateWidgets()
                         }
                     },
+                    onSetMacros = { protein, carbs, fat ->
+                        scope.launch {
+                            repository.setMacros(protein, carbs, fat)
+                            updateWidgets()
+                        }
+                    },
                     onApplyPreset = { preset ->
                         scope.launch {
                             repository.applyPreset(preset)
                             updateWidgets()
                         }
                     },
-                    onEditMacros = {
-                        // Could navigate to edit screen
-                    },
                     onEditAnnotation = { annotation ->
                         scope.launch {
-                            repository.updateAnnotation(DailyMacro.today(), annotation)
+                            repository.updateAnnotation(repository.getAdjustedTodayDate(), annotation)
                         }
+                    },
+                    onUndo = {
+                        val undone = repository.undoLastEntry()
+                        if (undone != null) {
+                            updateWidgets()
+                        }
+                        undone
                     }
                 )
             }
