@@ -68,6 +68,7 @@ fun SettingsScreen(
     var showWidgetDialog by remember { mutableStateOf(false) }
     var showSyncSettingsDialog by remember { mutableStateOf(false) }
     var showConflictDialog by remember { mutableStateOf<BackupData?>(null) }
+    var showFirstConnectRestoreDialog by remember { mutableStateOf<BackupData?>(null) }
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var dropboxStatus by remember { mutableStateOf<String?>(null) }
@@ -86,16 +87,37 @@ fun SettingsScreen(
                 val nowLinked = app.dropboxManager.isLinked
 
                 if (!wasLinked && nowLinked) {
-                    // Just connected
+                    // Just connected - check for existing remote backup before enabling sync
                     isDropboxLinked = true
                     dropboxEmail = app.dropboxManager.accountEmail
-                    dropboxStatus = "Connected to Dropbox!"
+                    dropboxStatus = "Connected! Checking for existing backup..."
                     lastSyncTime = app.dropboxManager.lastSyncTime
 
-                    // Enable auto-sync by default when linking
-                    val currentSync = syncSettings ?: SyncSettings()
-                    onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
-                    SyncWorker.scheduleDailySync(context)
+                    // Check for remote backup BEFORE enabling auto-sync
+                    // This prevents overwriting an existing backup with empty data
+                    scope.launch {
+                        when (val result = app.dropboxManager.downloadBackup()) {
+                            is SyncResult.SuccessWithData -> {
+                                if (result.backup.dailyMacros.isNotEmpty()) {
+                                    // Remote backup exists with data - ask user
+                                    showFirstConnectRestoreDialog = result.backup
+                                } else {
+                                    // Remote backup is empty - just enable sync
+                                    dropboxStatus = "Connected to Dropbox!"
+                                    val currentSync = syncSettings ?: SyncSettings()
+                                    onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
+                                    SyncWorker.scheduleDailySync(context)
+                                }
+                            }
+                            else -> {
+                                // No remote data or error - just enable sync
+                                dropboxStatus = "Connected to Dropbox!"
+                                val currentSync = syncSettings ?: SyncSettings()
+                                onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
+                                SyncWorker.scheduleDailySync(context)
+                            }
+                        }
+                    }
                 } else if (wasLinked && !nowLinked) {
                     // Disconnected externally
                     isDropboxLinked = false
@@ -624,7 +646,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "MacroPad v2.0",
+                    text = "MacroPad v2.0.4",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
@@ -673,6 +695,68 @@ fun SettingsScreen(
                     SyncWorker.cancelSync(context)
                 }
                 showSyncSettingsDialog = false
+            }
+        )
+    }
+
+    // First-connect restore dialog - shown when connecting to Dropbox and a backup exists
+    showFirstConnectRestoreDialog?.let { remoteBackup ->
+        AlertDialog(
+            onDismissRequest = {
+                // Don't allow dismissing without choosing - enable sync with local wins
+                showFirstConnectRestoreDialog = null
+                dropboxStatus = "Connected to Dropbox!"
+                val currentSync = syncSettings ?: SyncSettings()
+                onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
+                SyncWorker.scheduleDailySync(context)
+            },
+            title = { Text("Existing Backup Found") },
+            text = {
+                Column {
+                    Text("A backup was found on Dropbox. Would you like to restore it?")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${remoteBackup.dailyMacros.size} days of data, ${remoteBackup.presets.size} presets",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (remoteBackup.exportDate.isNotEmpty()) {
+                        Text(
+                            text = "Backed up: ${remoteBackup.exportDate.substringBefore("T")}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            importBackup(remoteBackup)
+                            dropboxStatus = "Restored from Dropbox!"
+                            // Now enable auto-sync
+                            val currentSync = syncSettings ?: SyncSettings()
+                            onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
+                            SyncWorker.scheduleDailySync(context)
+                        }
+                        showFirstConnectRestoreDialog = null
+                    }
+                ) {
+                    Text("Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        dropboxStatus = "Connected to Dropbox!"
+                        showFirstConnectRestoreDialog = null
+                        // Enable auto-sync without restoring
+                        val currentSync = syncSettings ?: SyncSettings()
+                        onSaveSyncSettings(currentSync.copy(autoSyncEnabled = true))
+                        SyncWorker.scheduleDailySync(context)
+                    }
+                ) {
+                    Text("Skip")
+                }
             }
         )
     }

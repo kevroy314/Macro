@@ -64,32 +64,60 @@ class MacroRepository(
     suspend fun addMacros(protein: Int = 0, carbs: Int = 0, fat: Int = 0, source: String = "manual") {
         val today = getTodayDate()
 
-        // Record the entry for history tracking
+        // Get existing values to ensure we don't go negative
+        val existing = dailyMacroDao.getByDate(today)
+
+        // Calculate actual changes, clamping to prevent negative totals
+        val actualProtein = if (existing != null) {
+            val newTotal = existing.proteinG + protein
+            if (newTotal < 0) -existing.proteinG else protein
+        } else {
+            maxOf(0, protein)
+        }
+
+        val actualCarbs = if (existing != null) {
+            val newTotal = existing.carbsG + carbs
+            if (newTotal < 0) -existing.carbsG else carbs
+        } else {
+            maxOf(0, carbs)
+        }
+
+        val actualFat = if (existing != null) {
+            val newTotal = existing.fatG + fat
+            if (newTotal < 0) -existing.fatG else fat
+        } else {
+            maxOf(0, fat)
+        }
+
+        // Record the entry for history tracking (using actual amounts applied)
         macroEntryDao.insert(
             MacroEntry(
                 date = today,
-                proteinG = protein,
-                carbsG = carbs,
-                fatG = fat,
+                proteinG = actualProtein,
+                carbsG = actualCarbs,
+                fatG = actualFat,
                 source = source
             )
         )
 
         // Update daily totals
-        val existing = dailyMacroDao.getByDate(today)
         if (existing == null) {
-            dailyMacroDao.upsert(DailyMacro(date = today, proteinG = protein, carbsG = carbs, fatG = fat))
+            dailyMacroDao.upsert(DailyMacro(date = today, proteinG = actualProtein, carbsG = actualCarbs, fatG = actualFat))
         } else {
-            dailyMacroDao.addMacros(today, protein, carbs, fat)
+            dailyMacroDao.addMacros(today, actualProtein, actualCarbs, actualFat)
         }
     }
 
     suspend fun setMacros(protein: Int, carbs: Int, fat: Int) {
         val today = getTodayDate()
         val existing = dailyMacroDao.getByDate(today)
+        // Ensure non-negative values
+        val safeProtein = maxOf(0, protein)
+        val safeCarbs = maxOf(0, carbs)
+        val safeFat = maxOf(0, fat)
         dailyMacroDao.upsert(
-            existing?.copy(proteinG = protein, carbsG = carbs, fatG = fat, updatedAt = System.currentTimeMillis())
-                ?: DailyMacro(date = today, proteinG = protein, carbsG = carbs, fatG = fat)
+            existing?.copy(proteinG = safeProtein, carbsG = safeCarbs, fatG = safeFat, updatedAt = System.currentTimeMillis())
+                ?: DailyMacro(date = today, proteinG = safeProtein, carbsG = safeCarbs, fatG = safeFat)
         )
     }
 
@@ -213,8 +241,18 @@ class MacroRepository(
         // Delete the entry
         macroEntryDao.deleteById(lastEntry.id)
 
-        // Subtract from daily totals
-        dailyMacroDao.addMacros(today, -lastEntry.proteinG, -lastEntry.carbsG, -lastEntry.fatG)
+        // Get current totals to clamp the subtraction (prevent negative values)
+        val existing = dailyMacroDao.getByDate(today)
+        if (existing != null) {
+            // Calculate how much we can actually subtract without going negative
+            val actualProteinDelta = minOf(lastEntry.proteinG, existing.proteinG)
+            val actualCarbsDelta = minOf(lastEntry.carbsG, existing.carbsG)
+            val actualFatDelta = minOf(lastEntry.fatG, existing.fatG)
+
+            // Subtract from daily totals (clamped to prevent negative)
+            dailyMacroDao.addMacros(today, -actualProteinDelta, -actualCarbsDelta, -actualFatDelta)
+        }
+        // If no existing record, nothing to subtract from
 
         return lastEntry
     }
@@ -286,7 +324,8 @@ class MacroRepository(
         // Import widget settings
         backup.widgetSettings?.let { saveWidgetSettings(it) }
 
-        // Import presets (merge - add new ones)
+        // Import presets (replace all to avoid duplicates)
+        presetDao.deleteAll()
         backup.presets.forEach { preset ->
             presetDao.upsert(preset.copy(id = 0))
         }

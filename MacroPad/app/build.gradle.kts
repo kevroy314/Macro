@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.macropad.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.macropad.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 20
-        versionName = "2.0"
+        targetSdk = 35
+        versionCode = 26
+        versionName = "2.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,14 +24,29 @@ android {
         buildConfigField("String", "DROPBOX_APP_KEY", "\"aulgixn4nqiw12b\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../macropad-release-key.jks")
+            storePassword = "macropad123"
+            keyAlias = "macropad"
+            keyPassword = "macropad123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

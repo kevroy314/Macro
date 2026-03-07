@@ -23,4 +23,7 @@ interface MacroPresetDao {
 
     @Query("DELETE FROM macro_presets WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM macro_presets")
+    suspend fun deleteAll()
 }

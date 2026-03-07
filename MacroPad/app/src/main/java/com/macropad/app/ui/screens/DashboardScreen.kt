@@ -495,21 +495,21 @@ fun AddMacrosDialog(
             Column {
                 OutlinedTextField(
                     value = protein,
-                    onValueChange = { protein = it.filter { c -> c.isDigit() || c == '-' } },
+                    onValueChange = { protein = it.filter { c -> c.isDigit() } },
                     label = { Text("Protein (g)") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = carbs,
-                    onValueChange = { carbs = it.filter { c -> c.isDigit() || c == '-' } },
+                    onValueChange = { carbs = it.filter { c -> c.isDigit() } },
                     label = { Text("Carbs (g)") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = fat,
-                    onValueChange = { fat = it.filter { c -> c.isDigit() || c == '-' } },
+                    onValueChange = { fat = it.filter { c -> c.isDigit() } },
                     label = { Text("Fat (g)") },
                     modifier = Modifier.fillMaxWidth()
                 )

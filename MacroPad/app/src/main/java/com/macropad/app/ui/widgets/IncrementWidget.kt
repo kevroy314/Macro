@@ -198,15 +198,38 @@ class AddMacroAction : ActionCallback {
         parameters: ActionParameters
     ) {
         try {
-            val protein = parameters[ActionParameters.Key<Int>("protein")] ?: 0
-            val carbs = parameters[ActionParameters.Key<Int>("carbs")] ?: 0
-            val fat = parameters[ActionParameters.Key<Int>("fat")] ?: 0
+            var protein = parameters[ActionParameters.Key<Int>("protein")] ?: 0
+            var carbs = parameters[ActionParameters.Key<Int>("carbs")] ?: 0
+            var fat = parameters[ActionParameters.Key<Int>("fat")] ?: 0
 
             val app = context.applicationContext as MacroPadApplication
 
             // Perform database operation on IO dispatcher and ensure it completes
             withContext(Dispatchers.IO) {
-                app.repository.addMacros(protein, carbs, fat)
+                // For decrements (negative values), check if it would go below zero
+                val currentMacros = app.repository.getTodayMacros()
+                if (currentMacros != null) {
+                    // Clamp decrements so we don't go below zero
+                    if (protein < 0 && currentMacros.proteinG + protein < 0) {
+                        protein = -currentMacros.proteinG // Set to exactly zero
+                    }
+                    if (carbs < 0 && currentMacros.carbsG + carbs < 0) {
+                        carbs = -currentMacros.carbsG
+                    }
+                    if (fat < 0 && currentMacros.fatG + fat < 0) {
+                        fat = -currentMacros.fatG
+                    }
+                } else {
+                    // No current macros, don't allow decrements
+                    if (protein < 0) protein = 0
+                    if (carbs < 0) carbs = 0
+                    if (fat < 0) fat = 0
+                }
+
+                // Only add if there's something to add
+                if (protein != 0 || carbs != 0 || fat != 0) {
+                    app.repository.addMacros(protein, carbs, fat)
+                }
             }
 
             // Force update MacroStatusWidget using state-based update mechanism

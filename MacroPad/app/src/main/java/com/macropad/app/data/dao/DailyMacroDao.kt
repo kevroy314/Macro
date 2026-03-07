@@ -24,7 +24,7 @@ interface DailyMacroDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(dailyMacro: DailyMacro)
 
-    @Query("UPDATE daily_macros SET proteinG = proteinG + :protein, carbsG = carbsG + :carbs, fatG = fatG + :fat, updatedAt = :timestamp WHERE date = :date")
+    @Query("UPDATE daily_macros SET proteinG = MAX(0, proteinG + :protein), carbsG = MAX(0, carbsG + :carbs), fatG = MAX(0, fatG + :fat), updatedAt = :timestamp WHERE date = :date")
     suspend fun addMacros(date: String, protein: Int, carbs: Int, fat: Int, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE daily_macros SET annotation = :annotation, updatedAt = :timestamp WHERE date = :date")

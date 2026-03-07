@@ -44,9 +44,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Update widgets when leaving the app to ensure they reflect any changes made
+        updateWidgets()
+    }
+
     private fun updateWidgets() {
         kotlinx.coroutines.GlobalScope.launch {
-            MacroStatusWidget().updateAll(this@MainActivity)
+            MacroStatusWidget.forceUpdateAll(this@MainActivity)
             IncrementWidget().updateAll(this@MainActivity)
             PresetWidget().updateAll(this@MainActivity)
         }
@@ -73,7 +79,8 @@ fun MainScreen(repository: MacroRepository) {
 
     fun updateWidgets() {
         scope.launch {
-            MacroStatusWidget().updateAll(context)
+            // Use forceUpdateAll for MacroStatusWidget to ensure state change triggers re-render
+            MacroStatusWidget.forceUpdateAll(context)
             IncrementWidget().updateAll(context)
             PresetWidget().updateAll(context)
         }
