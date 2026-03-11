@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         kotlinx.coroutines.GlobalScope.launch {
             MacroStatusWidget.forceUpdateAll(this@MainActivity)
             IncrementWidget().updateAll(this@MainActivity)
-            PresetWidget().updateAll(this@MainActivity)
+            PresetWidget.forceUpdateAll(this@MainActivity)
         }
     }
 }
@@ -79,10 +79,10 @@ fun MainScreen(repository: MacroRepository) {
 
     fun updateWidgets() {
         scope.launch {
-            // Use forceUpdateAll for MacroStatusWidget to ensure state change triggers re-render
+            // Use forceUpdateAll for MacroStatusWidget and PresetWidget to ensure state change triggers re-render
             MacroStatusWidget.forceUpdateAll(context)
             IncrementWidget().updateAll(context)
-            PresetWidget().updateAll(context)
+            PresetWidget.forceUpdateAll(context)
         }
     }
 

@@ -1,20 +1,32 @@
 package com.macropad.app.ui.widgets
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.*
 import androidx.glance.action.*
+import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.*
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.layout.*
+import androidx.glance.state.GlanceStateDefinition
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
+import com.macropad.app.MainActivity
 import com.macropad.app.MacroPadApplication
 import com.macropad.app.data.entity.MacroPreset
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,21 +36,93 @@ private val WidgetTextMuted = Color(0xFF9CA3AF)
 private val WidgetAccent = Color(0xFFA78BFA)
 private val WidgetSurface = Color(0xFF1A1A1A)
 
+// Key for storing preset data in widget preferences
+private val KEY_PRESETS_JSON = stringPreferencesKey("presets_json")
+
+// Maximum number of presets to display
+private const val MAX_PRESETS = 128
+
+// Gson instance for JSON serialization
+private val gson = Gson()
+
 class PresetWidget : GlanceAppWidget() {
+
+    // Use PreferencesGlanceStateDefinition to enable state-based updates
+    override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Fetch fresh data from database and update preferences BEFORE rendering
         val presets: List<MacroPreset> = try {
             val app = context.applicationContext as MacroPadApplication
-            app.repository.getAllPresets()
+            app.repository.getAllPresets().take(MAX_PRESETS)
         } catch (e: Exception) {
-            // Fallback to empty list if database access fails
             emptyList()
         }
 
+        // Serialize and store presets in widget preferences
+        val presetsJson = gson.toJson(presets)
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { prefs ->
+            prefs.toMutablePreferences().apply {
+                this[KEY_PRESETS_JSON] = presetsJson
+            }
+        }
+
         provideContent {
-            PresetWidgetContent(presets.take(4))
+            // Read from the widget's preferences state
+            val prefs = currentState<Preferences>()
+            val storedJson = prefs[KEY_PRESETS_JSON]
+            val displayPresets = if (storedJson != null) {
+                try {
+                    val type = object : TypeToken<List<MacroPreset>>() {}.type
+                    gson.fromJson<List<MacroPreset>>(storedJson, type)
+                } catch (e: Exception) {
+                    presets
+                }
+            } else {
+                presets
+            }
+
+            PresetWidgetContent(displayPresets)
+        }
+    }
+
+    companion object {
+        /**
+         * Update the widget with fresh data from the database.
+         * This writes data INTO the widget's preferences, which Glance observes.
+         */
+        suspend fun forceUpdate(context: Context, glanceId: GlanceId) {
+            // Fetch fresh data from database
+            val presets: List<MacroPreset> = try {
+                val app = context.applicationContext as MacroPadApplication
+                app.repository.getAllPresets().take(MAX_PRESETS)
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            // Serialize and write to widget preferences
+            val presetsJson = gson.toJson(presets)
+            updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+                prefs.toMutablePreferences().apply {
+                    this[KEY_PRESETS_JSON] = presetsJson
+                }
+            }
+
+            // Trigger the actual update
+            PresetWidget().update(context, glanceId)
+        }
+
+        /**
+         * Force update all instances of this widget
+         */
+        suspend fun forceUpdateAll(context: Context) {
+            val manager = GlanceAppWidgetManager(context)
+            val glanceIds = manager.getGlanceIds(PresetWidget::class.java)
+            glanceIds.forEach { glanceId ->
+                forceUpdate(context, glanceId)
+            }
         }
     }
 }
@@ -65,17 +149,33 @@ fun PresetWidgetContent(presets: List<MacroPreset>) {
         Spacer(modifier = GlanceModifier.height(6.dp))
 
         if (presets.isEmpty()) {
-            Text(
-                text = "No presets",
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextMuted),
-                    fontSize = 11.sp
+            // Empty state - clickable to open Presets screen
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .defaultWeight()
+                    .clickable(actionStartActivity<MainActivity>()),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No presets - tap to add",
+                    style = TextStyle(
+                        color = ColorProvider(WidgetTextMuted),
+                        fontSize = 11.sp
+                    )
                 )
-            )
+            }
         } else {
-            presets.forEach { preset ->
-                PresetButton(preset)
-                Spacer(modifier = GlanceModifier.height(4.dp))
+            // Scrollable list of presets
+            LazyColumn(
+                modifier = GlanceModifier.fillMaxSize()
+            ) {
+                items(presets, itemId = { it.id }) { preset ->
+                    Column {
+                        PresetButton(preset)
+                        Spacer(modifier = GlanceModifier.height(4.dp))
+                    }
+                }
             }
         }
     }
@@ -143,8 +243,6 @@ class ApplyPresetAction : ActionCallback {
             }
 
             // Force update MacroStatusWidget using state-based update mechanism
-            // This changes the widget's preferences state, which forces Glance to
-            // recognize a state change and re-run provideGlance with fresh data
             MacroStatusWidget.forceUpdateAll(context)
         } catch (e: Exception) {
             // Silently fail - widget will show stale data until next update
