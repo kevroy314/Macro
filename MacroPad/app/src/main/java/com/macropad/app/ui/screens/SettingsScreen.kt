@@ -1198,9 +1198,9 @@ fun ServerBackupCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Back up daily", style = MaterialTheme.typography.bodyMedium)
+                    Text("Back up automatically", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Automatically, whenever your server is reachable.",
+                        "Shortly after you log something, and once a day regardless.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )

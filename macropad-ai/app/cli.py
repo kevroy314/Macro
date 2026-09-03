@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from . import config, db, releases, tls, users
+from . import backups, config, db, releases, tls, users
 from .main import sweep_old_images
 
 
@@ -137,6 +137,35 @@ def main(argv: list[str]) -> int:
         print(f"certificate  {tls.CERT_PATH}")
         print(f"public key pin  {pin}")
         print("\nRestart the daemon to serve HTTPS with it.", file=sys.stderr)
+    elif command == "backups":
+        users.bootstrap()
+        import datetime
+        for user in users.all_users():
+            info = backups.meta(user.id)
+            print(f"{user.id}:")
+            if not info.get("exists"):
+                print("  (nothing backed up)")
+                continue
+            when = datetime.datetime.fromtimestamp(info["updated_at"] / 1000)
+            print(f"  current    {when:%Y-%m-%d %H:%M}  "
+                  f"{info['days']} days, {info['presets']} presets")
+            for gen in backups.generations(user.id):
+                when = datetime.datetime.fromtimestamp(gen["updated_at"] / 1000)
+                print(f"  {gen['name']:10s} {when:%Y-%m-%d %H:%M}  "
+                      f"{gen['size_bytes'] // 1024} KB")
+    elif command == "restore-backup":
+        if len(argv) < 4:
+            print("usage: restore-backup <user> <daily|weekly|monthly>", file=sys.stderr)
+            return 1
+        users.bootstrap()
+        try:
+            info = backups.promote(argv[2], argv[3])
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print(f"{argv[3]} copy is now current: {info['days']} days, "
+              f"{info['presets']} presets")
+        print("Restore from the app to pull it onto the phone.", file=sys.stderr)
     elif command == "stats":
         db.connect()
         jobs = [j for u in users.all_users() for j in db.list_jobs(u.id, limit=10000)]
@@ -155,7 +184,7 @@ def main(argv: list[str]) -> int:
         print(
             "usage: python -m app.cli {show-key|rotate-key|sweep-images|stats"
             "|add-user|list-users|rotate-user-key|remove-user"
-            "|setup-qr|release-qr|cert}",
+            "|setup-qr|release-qr|cert|backups|restore-backup}",
             file=sys.stderr,
         )
         return 1

@@ -46,7 +46,7 @@ import com.macropad.app.data.entity.WidgetSettings
         AiThread::class,
         AiThreadMessage::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class MacroPadDatabase : RoomDatabase() {
@@ -254,6 +254,23 @@ abstract class MacroPadDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Turn daily backup on for installs that already have a server.
+         *
+         * The default in the entity only reaches rows created after it, and everyone
+         * already using the AI features has a row. Deliberately scoped to configured
+         * installs: switching it on where there is no server to back up to would
+         * schedule work that can never succeed.
+         */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "UPDATE ai_settings SET autoBackup = 1 " +
+                        "WHERE serverUrl != '' AND apiKey != ''"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): MacroPadDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -263,7 +280,7 @@ abstract class MacroPadDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10
                 )
                 // Deliberately NOT fallbackToDestructiveMigration(). This database is
                 // the only copy of months of the user's food log; a migration bug

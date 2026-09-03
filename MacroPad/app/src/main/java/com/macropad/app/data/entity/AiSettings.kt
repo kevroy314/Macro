@@ -39,11 +39,14 @@ data class AiSettings(
     /**
      * Back up to the server once a day without being asked.
      *
-     * Off by default, because it makes the app talk to the server on its own
-     * schedule rather than when you tap something. Worth turning on: a backup you
-     * have to remember to take is the one that is out of date when the phone dies.
+     * On by default once a server is configured — a maintainer decision, recorded in
+     * CONTRIBUTING. It talks to the server on its own schedule, which normally means
+     * a flag that starts off, but a backup you have to remember to take is the one
+     * that turns out to be a month old when the phone goes in a river. It sends your
+     * own data to your own server and costs nothing, and the switch is one tap away
+     * in Settings.
      */
-    val autoBackup: Boolean = false,
+    val autoBackup: Boolean = true,
     val lastAutoBackupAt: Long = 0
 ) {
     val isConfigured: Boolean

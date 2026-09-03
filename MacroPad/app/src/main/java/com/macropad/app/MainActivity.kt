@@ -590,7 +590,8 @@ fun MainScreen(
                             repository.saveAiSettings(
                                 repository.getAiSettings().copy(autoBackup = on)
                             )
-                            ServerBackupWorker.sync(context, on)
+                            (context.applicationContext as MacroPadApplication)
+                                .setAutoBackup(on)
                         }
                     },
                     getAllMacros = { repository.getAllMacros() },

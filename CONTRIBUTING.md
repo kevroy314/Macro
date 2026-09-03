@@ -41,6 +41,13 @@ If you're unsure, assume it needs a flag and say so in the PR; being told it doe
 a two-line review comment. Ship it unflagged only when the maintainer says so
 explicitly.
 
+**Recorded exceptions.** Daily server backup (`AiSettings.autoBackup`) ships *on* for
+installs that have a server configured. The maintainer asked for it explicitly: it sends
+your own data to your own server, costs nothing, and the failure it prevents — losing a
+phone and discovering the last backup was taken weeks ago — is worse than the surprise of
+a background upload. That is what "unless otherwise stated" looks like; state it here when
+it happens, with the reason.
+
 The exception is a fix. If a feature is already on and it's broken, fixing it is not a
 new feature and does not need a flag.
 

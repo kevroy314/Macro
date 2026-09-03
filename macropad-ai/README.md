@@ -160,9 +160,27 @@ Play-installed copy has no server configured, so it never sees the update UI.
 
 ## Backups
 
-Each user backs up to their own slot on this daemon: **Settings → Server Backup → Back
-up**. Three rotations are kept per person, written to a staging file and renamed, so a
-connection dropping mid-upload cannot leave a half-written backup where a good one was.
+Each user backs up to their own slot on this daemon, written to a staging file and
+renamed so a connection dropping mid-upload cannot leave a half-written backup where a
+good one was.
+
+Backups run on their own once a server is connected: a few minutes after you log
+something, and once a day regardless. The toggle is in **Settings → Server Backup**.
+
+Three numbered rotations are kept, plus a **daily, weekly and monthly** copy. The
+numbered ones alone were several days of history when backups were taken by hand; now
+that they arrive minutes after a change, three of them can span an hour — and the
+mistake worth recovering from is usually a deletion noticed days later, not a lost
+phone. Each generation is only replaced once the copy in it is older than its own
+window, so they hold their distance however often backups arrive.
+
+```bash
+docker compose exec macropad-ai python -m app.cli backups
+docker compose exec macropad-ai python -m app.cli restore-backup kevin weekly
+```
+
+`restore-backup` makes an older copy the current one — the phone then pulls it with
+**Restore**. It rotates the copy it replaces, so promoting the wrong one is undoable.
 
 This exists because Dropbox is not shareable. A Dropbox app registration in Development
 status admits exactly one linked account, so the second person in a household hits

@@ -6,6 +6,7 @@ import com.macropad.app.ai.AiSyncManager
 import com.macropad.app.ai.AppUpdater
 import com.macropad.app.ai.PlanningManager
 import com.macropad.app.ai.PresetTagger
+import androidx.room.InvalidationTracker
 import com.macropad.app.data.MacroPadDatabase
 import com.macropad.app.data.repository.MacroRepository
 import com.macropad.app.sync.DropboxMigration
@@ -51,9 +52,51 @@ class MacroPadApplication : Application() {
         // means a reinstall or a cleared job store still ends up matching the setting.
         applicationScope.launch {
             val settings = repository.getAiSettings()
-            ServerBackupWorker.sync(this@MacroPadApplication, settings.autoBackup && settings.isConfigured)
+            val on = settings.autoBackup && settings.isConfigured
+            setAutoBackup(on)
         }
     }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Queue a backup whenever the data actually changes.
+     *
+     * Room's invalidation tracker is the one place that sees every write to these
+     * tables, whoever made it — the app, a widget tap, an AI estimate landing. Hooking
+     * each repository method instead would mean the next new write path silently
+     * stops being backed up.
+     *
+     * The upload itself only touches ai_settings, which is not observed here, so this
+     * cannot feed itself.
+     */
+    private var watchingForChanges = false
+
+    /** Turn the daily timer and the change trigger on or off together. */
+    fun setAutoBackup(on: Boolean) {
+        ServerBackupWorker.sync(this, on)
+        if (on) watchForChanges()
+    }
+
+    @Synchronized
+    private fun watchForChanges() {
+        // Registering twice would queue two uploads per change.
+        if (watchingForChanges) return
+        watchingForChanges = true
+        database.invalidationTracker.addObserver(
+            object : InvalidationTracker.Observer(
+                arrayOf(
+                    "daily_macros",
+                    "macro_entries",
+                    "macro_presets",
+                    "macro_targets",
+                    "preset_display_settings"
+                )
+            ) {
+                override fun onInvalidated(tables: Set<String>) {
+                    ServerBackupWorker.afterChange(this@MacroPadApplication)
+                }
+            }
+        )
+    }
 }
