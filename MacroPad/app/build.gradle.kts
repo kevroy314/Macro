@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,8 @@ android {
         applicationId = "com.macropad.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "2.0.7"
+        versionCode = 39
+        versionName = "2.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,12 +26,28 @@ android {
         buildConfigField("String", "DROPBOX_APP_KEY", "\"aulgixn4nqiw12b\"")
     }
 
+    // Release signing credentials live in keystore.properties, which is git-ignored.
+    // They used to be written here in plain text, in a file tracked in a public
+    // repository — the password that was published there has since been changed.
+    // Anyone holding the keystore can sign an update this app installs as genuine,
+    // so neither the file nor its password belongs in version control.
+    //
+    // Copy keystore.properties.example to keystore.properties to build a release.
+    val keystoreProperties = Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.exists()) file.inputStream().use { load(it) }
+    }
+
     signingConfigs {
         create("release") {
-            storeFile = file("../macropad-release-key.jks")
-            storePassword = "macropad123"
-            keyAlias = "macropad"
-            keyPassword = "macropad123"
+            val store = keystoreProperties.getProperty("storeFile")
+                ?: "../macropad-release-key.jks"
+            storeFile = file(store)
+            storePassword = keystoreProperties.getProperty("storePassword")
+                ?: System.getenv("MACROPAD_STORE_PASSWORD")
+            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "macropad"
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+                ?: System.getenv("MACROPAD_KEY_PASSWORD")
         }
     }
 
@@ -107,8 +125,22 @@ dependencies {
     // OkHttp for network requests (proper SSL handling)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // Image loading for AI entry thumbnails
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // Reliable EXIF orientation for camera photos
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // QR codes: zxing encodes, and Play Services scans in its own UI so the app
+    // never needs the CAMERA permission (which would break ACTION_IMAGE_CAPTURE).
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
     // WorkManager for background sync
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Unit tests for pure logic (search scoring, macro arithmetic)
+    testImplementation("junit:junit:4.13.2")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
