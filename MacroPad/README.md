@@ -1,58 +1,44 @@
-# MacroPad
+# MacroPad — Android app
 
-Fast macro nutrient tracking Android app with home screen widgets.
-
-## Features
-
-- **Quick Macro Tracking**: Add protein, carbs, and fat with a single tap
-- **Home Screen Widgets**:
-  - **Macro Status Widget**: Displays current daily totals vs targets
-  - **Increment Widget**: Quick +/- buttons for each macro
-  - **Preset Widget**: Apply saved meal presets instantly
-- **Daily Targets**: Set and track protein, carbs, and fat goals
-- **Presets**: Save frequently eaten meals for quick logging
-- **History**: View past days and add annotations
-- **Day Reset Time**: Configure when your tracking day rolls over (e.g., 5am for night owls)
-- **Dropbox Sync**: Backup and restore data across devices
-- **Export/Import**: CSV and JSON export for data portability
-
-## Version History
-
-### v2.0 (Current Stable)
-This is the first stable release with all core features working reliably.
-
-**Key fixes in v2.0:**
-- **Widget Update Fix**: Widgets now reliably update when macros are added via increment or preset widgets
-  - Implemented `PreferencesGlanceStateDefinition` pattern to force Glance to recognize state changes
-  - Widget data is written to preferences state before triggering update, ensuring Glance recomposes with fresh data
-- **Day Reset Time Setting**: Now visible as a dedicated card in Settings (was previously hidden in a dialog)
-- **Day Reset Hour**: All date calculations now properly respect the configured day reset hour
-
-**Architecture Notes (for future reference):**
-- The widget update issue was caused by Glance not re-running `provideGlance()` when `update()` was called
-- Solution: Use `updateAppWidgetState()` to write data INTO the widget's `PreferencesGlanceStateDefinition`, then call `update()`. Glance detects the preferences change and triggers a recomposition.
-- Key files: `MacroStatusWidget.kt`, `IncrementWidget.kt`, `PresetWidget.kt`
-
-### Previous Versions
-- v1.x: Development versions with various bug fixes and feature additions
-
-## Tech Stack
-
-- **UI**: Jetpack Compose
-- **Widgets**: Jetpack Glance
-- **Database**: Room
-- **Cloud Sync**: Dropbox SDK
-- **Background Work**: WorkManager
+The app itself. For what MacroPad is, screenshots, and the optional self-hosted AI
+features, see the [repository README](../README.md) and the
+[documentation site](https://kevroy314.github.io/Macro/).
 
 ## Building
 
+Requires **Java 17** and the Android SDK (compileSdk 35, minSdk 26). If your system Java
+is older, point `JAVA_HOME` at a 17 install for the build only.
+
 ```bash
-./gradlew assembleDebug
+JAVA_HOME=/path/to/java17 ./gradlew assembleRelease
+
+# or, to sign and publish to a configured daemon in one step:
+RELEASE_NOTES="what changed" ./build_release.sh
 ```
 
-APK will be at `app/build/outputs/apk/debug/app-debug.apk`
+## Before you open a pull request
 
-## Requirements
+```bash
+JAVA_HOME=/path/to/java17 ./gradlew testReleaseUnitTest   # unit tests
+/usr/bin/python3 tools/verify_migrations.py               # if you touched the schema
+```
 
-- Android 8.0 (API 26) or higher
-- Java 17 for building
+`verify_migrations.py` replays every migration from a seeded baseline and diffs the result
+against the schema Room generates from the entities. This database is the only copy of
+months of someone's food log and there is deliberately no destructive fallback, so a
+schema change that doesn't verify is a schema change that isn't ready.
+
+Contribution rules, including when a feature needs a Settings flag, are in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Layout
+
+```
+app/src/main/java/com/macropad/app/
+  data/          Room entities, DAOs, migrations, MacroRepository
+  ai/            the optional AI estimator, planning, updates, discovery
+  net/           AiClient — everything that talks to the daemon
+  sync/          backup formats, Dropbox, server backup, merge planning
+  ui/screens/    Compose screens
+  ui/widgets/    Glance home screen widgets
+```

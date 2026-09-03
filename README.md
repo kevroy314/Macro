@@ -34,16 +34,37 @@
   - **Preset Widget**: Apply saved meals with a single tap
 - **Presets** — Save go-to meals for one-tap logging
 - **Flexible Day Reset** — Set your tracking day to reset at any hour
+- **History** — A per-entry timeline of everything logged, with where it came from
 - **Data Export** — Export as CSV or JSON
-- **Dropbox Backup** — Optional cloud sync to your personal Dropbox
+- **Backup** — To your own server, or your personal Dropbox
 - **Privacy First** — All data stored locally, no accounts, no ads, no tracking
+
+### Optional, self-hosted
+
+These need a server you run yourself. The app is fully functional without them, and
+there is no MacroPad server and no account with us.
+
+- **AI Estimator** — Photograph a meal, a label, a menu or a receipt, and a Claude session
+  on *your* machine researches the macros and logs them. Asks a follow-up question only
+  when it would meaningfully change the estimate. Jobs photographed away from home send
+  themselves when you get back.
+- **Planning** — Multi-turn conversations that can see your targets and presets, and can
+  log what they suggest
+- **Preset search** — Semantic-ish search by meaning, tagged in the background so typing
+  stays instant
+- **Share with a household** — One server, separate keys, nobody sees anyone else's food
+- **In-app updates** — Served from your own machine
+
+See the [setup guide](https://kevroy314.github.io/Macro/self-hosting) — no domain, no
+dynamic DNS, no certificate, and no router changes required.
 
 ## Tech Stack
 
 - Kotlin, Jetpack Compose, Material 3
 - Room database with MVVM + Repository pattern
 - Glance app widgets
-- WorkManager for background Dropbox sync
+- WorkManager for background sync
+- Optional daemon: FastAPI + SQLite + the Claude Agent SDK, in Docker (`macropad-ai/`)
 
 ## Building
 
@@ -52,6 +73,12 @@ Requires Java 17 and Android SDK (compileSdk 35, minSdk 26).
 ```bash
 ./MacroPad/build_release.sh
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Features are approved by the maintainer, and
+significant ones — anything that notifies you unprompted, changes navigation, or spends
+your AI quota on its own — ship behind a Settings flag that starts disabled.
 
 ## Privacy Policy
 

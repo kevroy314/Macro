@@ -2,7 +2,7 @@
 
 **Fast macro nutrient tracking with home screen widgets**
 
-[Download Latest Release](https://github.com/kevroy314/Macro/releases/latest) | [Privacy Policy](privacy-policy.md) | [Source Code](https://github.com/kevroy314/Macro)
+[Download Latest Release](https://github.com/kevroy314/Macro/releases/latest) | [Set up the AI Estimator](self-hosting.md) | [Privacy Policy](privacy-policy.md) | [Source Code](https://github.com/kevroy314/Macro)
 
 ---
 
@@ -22,8 +22,26 @@ Night owl? Set your day to reset at 4am instead of midnight. Your macros follow 
 ### Presets
 Save your frequently eaten meals and snacks. Apply them instantly without re-entering the same numbers.
 
-### Cloud Backup
-Optional Dropbox sync keeps your data safe and lets you restore on a new device.
+### Backup
+Back up to your own server, or to your personal Dropbox. Either way the data goes
+somewhere you own. Restoring fills in what's missing rather than overwriting days you've
+already logged.
+
+### AI Estimator (optional, self-hosted)
+For the meals where you don't know the numbers. Photograph the plate, the label, the menu
+or the receipt, add a sentence, and a Claude session **running on your own machine**
+researches it and logs the result. It asks a follow-up question only when the answer would
+move the estimate by more than a threshold you set.
+
+Photograph it at the restaurant and it sends itself when you get home.
+
+There is no MacroPad server and no account with us — you run it, on your hardware, on your
+own Claude subscription. [Setup guide](self-hosting.md).
+
+### Planning (optional, self-hosted)
+Ask things like *"if I'm having one more protein meal today, how much Goldfish can I have
+and stay under my calories?"* It can see your targets, presets and totals, and it can log
+what it suggests.
 
 ### Export Your Data
 Your data is yours. Export anytime as CSV or JSON.
@@ -32,7 +50,12 @@ Your data is yours. Export anytime as CSV or JSON.
 
 ## Screenshots
 
-*Coming soon*
+<p align="center">
+  <img src="assets/screenshots/dashboard.jpg" alt="Dashboard" width="200">
+  <img src="assets/screenshots/history.jpg" alt="History" width="200">
+  <img src="assets/screenshots/presets.jpg" alt="Presets" width="200">
+  <img src="assets/screenshots/settings.jpg" alt="Settings" width="200">
+</p>
 
 ---
 
@@ -53,5 +76,7 @@ Found a bug or have a feature request? [Open an issue on GitHub](https://github.
 ## Legal
 
 - [Privacy Policy](privacy-policy.md)
+- [Setting up the AI Estimator](self-hosting.md)
+- [Contributing](https://github.com/kevroy314/Macro/blob/main/CONTRIBUTING.md)
 
 MacroPad is open source software released under the MIT License.
