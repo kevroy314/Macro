@@ -7,4 +7,6 @@
     <string name="increment_widget_description">Quick macro increment buttons</string>
     <string name="preset_widget_name">Presets</string>
     <string name="preset_widget_description">Apply macro presets</string>
+    <string name="ai_add_widget_name">AI Add</string>
+    <string name="ai_add_widget_description">Estimate macros from a photo and a note</string>
 </resources>

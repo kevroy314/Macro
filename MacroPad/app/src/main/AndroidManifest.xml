@@ -2,6 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- AI estimator: follow-up questions and the in-progress status indicator -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!--
+      Self-update from the user's own daemon. Only reachable when an AI server is
+      configured, which a Play-installed copy never has.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".MacroPadApplication"
@@ -12,13 +21,28 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MacroPad">
 
+        <!--
+          adjustResize, not the default pan: with panning, opening the keyboard on
+          the planning chat shoves the whole window up and the top of the
+          conversation off the screen. Resizing shrinks the content instead.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MacroPad">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- macropad://setup?url=..&key=.. — a setup QR, if the scanner that
+                 read it hands off custom schemes. The in-app scanner is the path
+                 that always works. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:host="setup" android:scheme="macropad" />
             </intent-filter>
         </activity>
 
@@ -83,6 +107,35 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/preset_widget_info" />
+        </receiver>
+
+        <!-- AI Add Widget -->
+        <receiver
+            android:name=".ui.widgets.AiAddWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/ai_add_widget_info" />
+        </receiver>
+
+        <!-- AI estimator: polls the daemon while a job is outstanding -->
+        <service
+            android:name=".ai.AiJobSyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- AI estimator: inline notification replies and cancel -->
+        <receiver
+            android:name=".ai.AiActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.macropad.app.AI_REPLY" />
+                <action android:name="com.macropad.app.AI_SKIP" />
+                <action android:name="com.macropad.app.AI_CANCEL" />
+            </intent-filter>
         </receiver>
 
     </application>

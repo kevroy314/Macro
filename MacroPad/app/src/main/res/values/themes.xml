@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MacroPad" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.MacroPad" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!--
+          The app draws edge-to-edge, so whatever is behind the system bars is the
+          window background. A light parent theme would put a white band above the
+          status bar and below the nav bar on a black app.
+        -->
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

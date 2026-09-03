@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -19,8 +21,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.macropad.app.data.entity.DailyMacro
+import com.macropad.app.data.entity.MacroEntry
 import com.macropad.app.data.entity.MacroEntryGroup
 import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.ui.theme.*
@@ -62,7 +66,19 @@ fun HistoryScreen(
         if (!macro.annotation.isNullOrBlank()) index to macro else null
     }
 
+    val listState = rememberLazyListState()
+
+    // Tapping a day card opens the detail section above it, which is off-screen from
+    // where the tap happened — scroll it into view rather than making them hunt.
+    LaunchedEffect(selectedDayForBurnup?.date) {
+        if (selectedDayForBurnup != null) {
+            val burnupIndex = if (filteredMacros.isEmpty()) 1 else 2
+            listState.animateScrollToItem(burnupIndex)
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
@@ -163,9 +179,9 @@ fun HistoryScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Entry log - show up to 10 entries, scrollable if more
+                            val entryCount = groupedEntries.sumOf { it.entries.size }
                             Text(
-                                text = "Entries (${groupedEntries.size} groups)",
+                                text = "Entry log ($entryCount)",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -173,18 +189,11 @@ fun HistoryScreen(
                             val scrollState = rememberScrollState()
                             Column(
                                 modifier = Modifier
-                                    .heightIn(max = 150.dp)
+                                    .heightIn(max = 400.dp)
                                     .verticalScroll(scrollState)
                             ) {
                                 groupedEntries.forEach { group ->
-                                    val time = Instant.ofEpochMilli(group.startTime)
-                                        .atZone(ZoneId.systemDefault())
-                                        .format(DateTimeFormatter.ofPattern("h:mm a"))
-                                    Text(
-                                        text = "$time: P+${group.totalProtein} C+${group.totalCarbs} F+${group.totalFat}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    EntryGroupRow(group = group)
                                 }
                             }
                         } else {
@@ -536,5 +545,91 @@ fun MacroStat(label: String, current: Int, target: Int, color: Color) {
             fontWeight = FontWeight.Bold,
             color = if (isOver) Red else MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+/**
+ * One 5-minute group in the entry log: each individual entry with where it came
+ * from, which is what makes a surprising total traceable — a preset tap, a widget
+ * nudge, and an AI estimate all look identical in the sum.
+ */
+@Composable
+fun EntryGroupRow(group: MacroEntryGroup) {
+    val time = Instant.ofEpochMilli(group.startTime)
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("h:mm a"))
+
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = time,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "running ${group.runningCalories} cal",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+
+        group.entries.forEach { entry ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entryLabel(entry),
+                        style = MaterialTheme.typography.bodySmall,
+                        textDecoration = if (entry.hidden) TextDecoration.LineThrough else null,
+                        color = if (entry.hidden) {
+                            MaterialTheme.colorScheme.outline
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    if (entry.hidden) {
+                        Text(
+                            text = "excluded from totals",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+                Text(
+                    text = buildString {
+                        append("P ${entry.proteinG}  C ${entry.carbsG}  F ${entry.fatG}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${entry.calories}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CaloriesColor
+                )
+            }
+        }
+    }
+}
+
+/** Human-readable provenance for an entry. */
+private fun entryLabel(entry: MacroEntry): String {
+    entry.note?.takeIf { it.isNotBlank() }?.let { note ->
+        return if (entry.source == MacroEntry.SOURCE_AI) "$note (AI)" else note
+    }
+    val source = entry.source
+    return when {
+        source.startsWith("preset:") -> source.removePrefix("preset:") + " (preset)"
+        source == MacroEntry.SOURCE_AI -> "AI estimate"
+        source == "widget" -> "Widget"
+        source == "manual" -> "Manual entry"
+        source.isBlank() -> "Entry"
+        else -> source.replaceFirstChar { it.uppercase() }
     }
 }

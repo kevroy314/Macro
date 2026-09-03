@@ -41,7 +41,8 @@ fun DashboardScreen(
     onSetMacros: (protein: Int, carbs: Int, fat: Int) -> Unit,
     onApplyPreset: (MacroPreset) -> Unit,
     onEditAnnotation: (String) -> Unit,
-    onUndo: suspend () -> MacroEntry?
+    onUndo: suspend () -> MacroEntry?,
+    onAiEntry: () -> Unit = {}
 ) {
     val todayMacros by todayMacrosFlow.collectAsState(initial = null)
     val target by targetFlow.collectAsState(initial = MacroTarget())
@@ -83,13 +84,20 @@ fun DashboardScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            if (proteinExceeded || carbsExceeded || fatExceeded || caloriesExceeded) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = "Target exceeded",
-                    tint = Red,
-                    modifier = Modifier.size(24.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (proteinExceeded || carbsExceeded || fatExceeded || caloriesExceeded) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = "Target exceeded",
+                        tint = Red,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                // For food whose macros need working out rather than typing in.
+                FilledTonalIconButton(onClick = onAiEntry) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = "AI estimate")
+                }
             }
         }
 

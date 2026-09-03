@@ -16,13 +16,24 @@ data class MacroEntry(
     val proteinG: Int = 0,
     val carbsG: Int = 0,
     val fatG: Int = 0,
-    val source: String = "manual" // "manual", "preset", "widget"
+    val source: String = "manual", // "manual", "preset", "widget", "ai"
+
+    /**
+     * Soft delete. The entry stays in the timeline for context but its macros have
+     * been subtracted back out of the day's totals.
+     */
+    val hidden: Boolean = false,
+    /** Set for entries an AI estimation job created. */
+    val aiJobId: String? = null,
+    /** Free text shown in History, e.g. the AI preset name. */
+    val note: String? = null
 ) {
     val calories: Int
         get() = (proteinG * 4) + (carbsG * 4) + (fatG * 9)
 
     companion object {
         const val GROUPING_WINDOW_MS = 5 * 60 * 1000L // 5 minutes
+        const val SOURCE_AI = "ai"
     }
 }
 

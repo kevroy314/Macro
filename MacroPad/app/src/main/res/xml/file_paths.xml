@@ -3,4 +3,12 @@
     <cache-path
         name="exports"
         path="." />
+    <!-- Where ACTION_IMAGE_CAPTURE writes a freshly taken meal photo. -->
+    <cache-path
+        name="ai_captures"
+        path="ai_captures/" />
+    <!-- Downloaded APKs handed to the system installer. -->
+    <cache-path
+        name="updates"
+        path="updates/" />
 </paths>

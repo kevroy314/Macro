@@ -24,13 +24,21 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.macropad.app.MacroPadApplication
+import com.macropad.app.ai.AppUpdater
+import com.macropad.app.data.entity.AiSettings
+import com.macropad.app.data.entity.ThresholdMode
+import com.macropad.app.net.AiCallResult
 import com.macropad.app.data.entity.ConflictResolution
 import com.macropad.app.data.entity.DailyMacro
 import com.macropad.app.data.entity.MacroPreset
 import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
+import com.macropad.app.net.ServerBackupMeta
+import com.macropad.app.ai.LanDiscovery
+import com.macropad.app.sync.DropboxMigration
 import com.macropad.app.sync.BackupData
+import com.macropad.app.sync.ServerBackup
 import com.macropad.app.sync.SyncResult
 import com.macropad.app.sync.SyncWorker
 import kotlinx.coroutines.flow.Flow
@@ -42,12 +50,17 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    setupSharing: @Composable () -> Unit = {},
     targetFlow: Flow<MacroTarget?>,
     widgetSettingsFlow: Flow<WidgetSettings?>,
     syncSettingsFlow: Flow<SyncSettings?>,
+    aiSettingsFlow: Flow<AiSettings?>,
     onSaveTarget: (MacroTarget) -> Unit,
     onSaveWidgetSettings: (WidgetSettings) -> Unit,
     onSaveSyncSettings: (SyncSettings) -> Unit,
+    onSaveAiSettings: (AiSettings) -> Unit,
+    onTestAiConnection: suspend (url: String, apiKey: String, certPin: String) -> AiCallResult<String>,
+    onDiscoverServer: suspend () -> String? = { null },
     getAllMacros: suspend () -> List<DailyMacro>,
     getAllPresets: suspend () -> List<MacroPreset>,
     getTarget: suspend () -> MacroTarget,
@@ -98,7 +111,7 @@ fun SettingsScreen(
                     scope.launch {
                         when (val result = app.dropboxManager.downloadBackup()) {
                             is SyncResult.SuccessWithData -> {
-                                if (result.backup.dailyMacros.isNotEmpty()) {
+                                if (result.backup.dailyMacroList.isNotEmpty()) {
                                     // Remote backup exists with data - ask user
                                     showFirstConnectRestoreDialog = result.backup
                                 } else {
@@ -172,6 +185,36 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // AI Estimator Section
+        AiEstimatorCard(
+            settingsFlow = aiSettingsFlow,
+            onSave = onSaveAiSettings,
+            onTestConnection = onTestAiConnection,
+            onDiscoverServer = onDiscoverServer
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Over-the-air updates, only when a server is configured to serve them.
+        val aiSettingsForUpdates by aiSettingsFlow.collectAsState(initial = null)
+        if (aiSettingsForUpdates?.isConfigured == true) {
+            AppUpdateCard(updater = app.appUpdater)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (aiSettingsForUpdates?.isConfigured == true) {
+            ServerBackupCard(
+                settingsFlow = aiSettingsFlow,
+                backup = app.serverBackup,
+                migration = app.dropboxMigration,
+                dropboxLinked = app.dropboxManager.isLinked
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        setupSharing()
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Dropbox Sync Section
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -716,7 +759,7 @@ fun SettingsScreen(
                     Text("A backup was found on Dropbox. Would you like to restore it?")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "${remoteBackup.dailyMacros.size} days of data, ${remoteBackup.presets.size} presets",
+                        text = "${remoteBackup.dailyMacroList.size} days of data, ${remoteBackup.presetList.size} presets",
                         style = MaterialTheme.typography.bodySmall
                     )
                     if (remoteBackup.exportDate.isNotEmpty()) {
@@ -771,7 +814,7 @@ fun SettingsScreen(
                     Text("Both local and Dropbox have data. Which would you like to keep?")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Remote: ${remoteBackup.dailyMacros.size} days, ${remoteBackup.presets.size} presets",
+                        text = "Remote: ${remoteBackup.dailyMacroList.size} days, ${remoteBackup.presetList.size} presets",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -894,6 +937,626 @@ fun SyncSettingsDialog(
             }
         }
     )
+}
+
+/**
+ * Update from the daemon this app already talks to.
+ *
+ * `build_release.sh` publishes each signed build to the server, so upgrading is a
+ * download and a tap rather than a cable and an adb command.
+ */
+@Composable
+fun AppUpdateCard(updater: AppUpdater) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<AppUpdater.State>(AppUpdater.State.Idle) }
+
+    suspend fun check() {
+        state = AppUpdater.State.Checking
+        state = when (val result = updater.check()) {
+            is AiCallResult.Failure -> AppUpdater.State.Failed(result.message)
+            is AiCallResult.Success -> result.value
+                ?.let { AppUpdater.State.Available(it) }
+                ?: AppUpdater.State.UpToDate
+        }
+    }
+
+    // Check once when Settings opens; no nagging anywhere else in the app.
+    LaunchedEffect(Unit) { check() }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.SystemUpdate, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "App Updates",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Installed: ${updater.currentVersionName} " +
+                    "(build ${updater.currentVersionCode})",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when (val current = state) {
+                is AppUpdater.State.Idle, is AppUpdater.State.Checking -> {
+                    Text(
+                        "Checking for updates…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                is AppUpdater.State.UpToDate -> {
+                    Text(
+                        "Up to date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { scope.launch { check() } }) {
+                        Text("Check again")
+                    }
+                }
+
+                is AppUpdater.State.Available -> {
+                    Text(
+                        "Version ${current.release.versionName} is available",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (current.release.notes.isNotBlank()) {
+                        Text(
+                            current.release.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = {
+                        scope.launch {
+                            state = AppUpdater.State.Downloading(current.release, 0f)
+                            val result = updater.download(current.release) { progress ->
+                                state = AppUpdater.State.Downloading(current.release, progress)
+                            }
+                            state = when (result) {
+                                is AiCallResult.Failure -> AppUpdater.State.Failed(result.message)
+                                is AiCallResult.Success ->
+                                    AppUpdater.State.ReadyToInstall(current.release, result.value)
+                            }
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Download " + formatSize(current.release.sizeBytes))
+                    }
+                }
+
+                is AppUpdater.State.Downloading -> {
+                    Text(
+                        "Downloading ${current.release.versionName}…",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (current.progress >= 0f) {
+                        LinearProgressIndicator(
+                            progress = current.progress.coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+
+                is AppUpdater.State.ReadyToInstall -> {
+                    Text(
+                        "Ready to install ${current.release.versionName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Your data is kept — this installs over the current version.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = {
+                        if (!updater.install(current.file)) {
+                            // Android needs explicit permission for this app to be an
+                            // install source; send them to the right settings page.
+                            context.startActivity(updater.unknownSourcesIntent())
+                        }
+                    }) {
+                        Text(
+                            if (updater.canInstallPackages()) {
+                                "Install"
+                            } else {
+                                "Allow installs, then return"
+                            }
+                        )
+                    }
+                }
+
+                is AppUpdater.State.Failed -> {
+                    Text(
+                        current.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { scope.launch { check() } }) { Text("Retry") }
+                }
+            }
+        }
+    }
+}
+
+private fun formatSize(bytes: Long): String =
+    if (bytes <= 0) "" else "(%.1f MB)".format(bytes / 1_048_576.0)
+
+
+/**
+ * Backup through the AI daemon.
+ *
+ * Offered next to Dropbox because a Dropbox app registration limits how many
+ * accounts can link to it — a household sharing one build hits that wall, and this
+ * server has no such limit and already keeps each person's data separate.
+ */
+@Composable
+fun ServerBackupCard(
+    settingsFlow: Flow<AiSettings?>,
+    backup: ServerBackup,
+    migration: DropboxMigration,
+    dropboxLinked: Boolean
+) {
+    val scope = rememberCoroutineScope()
+    val settings by settingsFlow.collectAsState(initial = null)
+    val current = settings ?: AiSettings()
+
+    var meta by remember { mutableStateOf<ServerBackupMeta?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var working by remember { mutableStateOf(false) }
+    var confirmRestore by remember { mutableStateOf(false) }
+    var migrationPreview by remember { mutableStateOf<DropboxMigration.Preview?>(null) }
+
+    suspend fun refresh() {
+        meta = backup.meta().successOrNull
+    }
+
+    LaunchedEffect(current.isConfigured) {
+        if (current.isConfigured) refresh()
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Backup, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Server Backup",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = when {
+                    !current.isConfigured -> "Set up the AI server to back up to it."
+                    meta?.exists == true -> {
+                        val when1 = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                            .format(Date(meta!!.updatedAt))
+                        "Last backup $when1 · ${meta!!.days} days, ${meta!!.presets} presets"
+                    }
+                    else -> "Nothing backed up yet."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            status?.let {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        working = true
+                        status = "Backing up…"
+                        scope.launch {
+                            status = when (val result = backup.backUpNow()) {
+                                is AiCallResult.Success -> "Backed up"
+                                is AiCallResult.Failure -> result.message
+                            }
+                            refresh()
+                            working = false
+                        }
+                    },
+                    enabled = current.isConfigured && !working
+                ) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Back up")
+                }
+
+                OutlinedButton(
+                    onClick = { confirmRestore = true },
+                    enabled = current.isConfigured && !working && meta?.exists == true
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Restore")
+                }
+            }
+
+            // One-time move for anyone whose history still lives in Dropbox.
+            if (dropboxLinked) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "This phone still has a Dropbox backup. Bring anything it " +
+                        "holds that's missing here, then back it all up to your server.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        working = true
+                        status = "Reading your Dropbox backup…"
+                        scope.launch {
+                            when (val result = migration.preview()) {
+                                is AiCallResult.Success -> {
+                                    migrationPreview = result.value
+                                    status = null
+                                }
+                                is AiCallResult.Failure -> status = result.message
+                            }
+                            working = false
+                        }
+                    },
+                    enabled = current.isConfigured && !working
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Migrate from Dropbox")
+                }
+            }
+        }
+    }
+
+    if (confirmRestore) {
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text("Restore from server") },
+            text = {
+                Text(
+                    "This fills in anything the backup has that this phone doesn't, and " +
+                        "updates your targets and presets to match it. Days you've logged " +
+                        "since the backup are kept."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRestore = false
+                    working = true
+                    status = "Restoring…"
+                    scope.launch {
+                        status = when (val result = backup.restore()) {
+                            is AiCallResult.Success -> if (result.value == 0) "Already up to date" else "Restored ${result.value} day(s)"
+                            is AiCallResult.Failure -> result.message
+                        }
+                        working = false
+                    }
+                }) { Text("Restore") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRestore = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Show what the migration would do before it does any of it.
+    migrationPreview?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { migrationPreview = null },
+            title = { Text("Migrate from Dropbox") },
+            text = {
+                Column {
+                    Text(preview.description)
+                    if (preview.entriesUnavailable) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "That backup predates per-entry history, so recovered days " +
+                                "will show their totals but not the individual entries.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Nothing on this phone is overwritten and nothing is removed " +
+                            "from Dropbox.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    migrationPreview = null
+                    working = true
+                    status = "Migrating…"
+                    scope.launch {
+                        status = when (val result = migration.migrate(preview)) {
+                            is AiCallResult.Success -> result.value
+                            is AiCallResult.Failure -> result.message
+                        }
+                        refresh()
+                        working = false
+                    }
+                }) { Text("Migrate") }
+            },
+            dismissButton = {
+                TextButton(onClick = { migrationPreview = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+/**
+ * Connection and behaviour settings for the self-hosted AI estimator.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AiEstimatorCard(
+    settingsFlow: Flow<AiSettings?>,
+    onSave: (AiSettings) -> Unit,
+    onTestConnection: suspend (url: String, apiKey: String, certPin: String) -> AiCallResult<String>,
+    onDiscoverServer: suspend () -> String? = { null }
+) {
+    val stored by settingsFlow.collectAsState(initial = null)
+    val scope = rememberCoroutineScope()
+
+    var expanded by remember { mutableStateOf(false) }
+    var url by remember(stored?.serverUrl) { mutableStateOf(stored?.serverUrl ?: "") }
+    var apiKey by remember(stored?.apiKey) { mutableStateOf(stored?.apiKey ?: "") }
+    var thresholdMode by remember(stored?.thresholdMode) {
+        mutableStateOf(stored?.thresholdMode ?: ThresholdMode.PERCENT)
+    }
+    var thresholdValue by remember(stored?.thresholdValue) {
+        mutableStateOf((stored?.thresholdValue ?: 10f).toInt().toString())
+    }
+    var autoApply by remember(stored?.autoApply) { mutableStateOf(stored?.autoApply ?: true) }
+    var showKey by remember { mutableStateOf(false) }
+    var testStatus by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+
+    val current = stored ?: AiSettings()
+
+    fun persist(enabled: Boolean = current.enabled) {
+        onSave(
+            current.copy(
+                enabled = enabled,
+                serverUrl = url.trim(),
+                apiKey = apiKey.trim(),
+                thresholdMode = thresholdMode,
+                thresholdValue = thresholdValue.toFloatOrNull() ?: 10f,
+                autoApply = autoApply
+            )
+        )
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "AI Estimator",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Switch(
+                    checked = current.enabled,
+                    onCheckedChange = { persist(enabled = it) }
+                )
+            }
+
+            Text(
+                text = if (current.isConfigured) {
+                    "Connected to ${current.baseUrl}"
+                } else {
+                    "Estimate macros from a photo using your own Claude daemon"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "Hide setup" else "Setup")
+            }
+
+            if (expanded) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Server address") },
+                    placeholder = { Text("https://macropad.home.example.com:1403") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text("API key") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = if (showKey) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { showKey = !showKey }) {
+                            Icon(
+                                if (showKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showKey) "Hide key" else "Show key"
+                            )
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Ask a follow-up question only when the answer could change " +
+                        "the estimate by more than:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = thresholdValue,
+                        onValueChange = { thresholdValue = it.filter { c -> c.isDigit() } },
+                        modifier = Modifier.width(110.dp),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    FilterChip(
+                        selected = thresholdMode == ThresholdMode.PERCENT,
+                        onClick = { thresholdMode = ThresholdMode.PERCENT },
+                        label = { Text("%") }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilterChip(
+                        selected = thresholdMode == ThresholdMode.ABSOLUTE,
+                        onClick = { thresholdMode = ThresholdMode.ABSOLUTE },
+                        label = { Text("cal") }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = autoApply, onCheckedChange = { autoApply = it })
+                    Column {
+                        Text("Log estimates automatically", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Adds the estimate as soon as it lands, and adjusts it if you " +
+                                "answer a follow-up",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                testStatus?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
+
+                if (current.certPin.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Pinned certificate", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "From your setup code. This phone trusts only your " +
+                                    "server's certificate, so a home server needs no " +
+                                    "public web address.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        TextButton(onClick = { onSave(current.copy(certPin = "")) }) {
+                            Text("Forget")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            testing = true
+                            testStatus = "Testing…"
+                            scope.launch {
+                                testStatus = when (
+                                    val result = onTestConnection(url.trim(), apiKey.trim(), current.certPin)
+                                ) {
+                                    is AiCallResult.Success -> result.value
+                                    is AiCallResult.Failure -> result.message
+                                }
+                                testing = false
+                            }
+                        },
+                        enabled = !testing && url.isNotBlank()
+                    ) { Text("Test connection") }
+
+                    // A home server sits on whatever address the router gave it, and
+                    // that changes. Only offered for a local address — a real hostname
+                    // doesn't move and must never be overwritten by a LAN address.
+                    if (url.isBlank() || LanDiscovery.isLocalAddress(url.trim())) {
+                        OutlinedButton(
+                            onClick = {
+                                testing = true
+                                testStatus = "Looking on this network…"
+                                scope.launch {
+                                    val found = onDiscoverServer()
+                                    testStatus = if (found != null) {
+                                        url = found
+                                        "Found it at $found"
+                                    } else {
+                                        "No server found on this network"
+                                    }
+                                    testing = false
+                                }
+                            },
+                            enabled = !testing
+                        ) { Text("Find on network") }
+                    }
+
+                    Button(onClick = {
+                        persist(enabled = true)
+                        testStatus = "Saved"
+                    }) { Text("Save") }
+                }
+            }
+        }
+    }
 }
 
 @Composable

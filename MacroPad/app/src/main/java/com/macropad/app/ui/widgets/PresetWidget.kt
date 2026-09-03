@@ -56,7 +56,7 @@ class PresetWidget : GlanceAppWidget() {
         // Fetch fresh data from database and update preferences BEFORE rendering
         val presets: List<MacroPreset> = try {
             val app = context.applicationContext as MacroPadApplication
-            app.repository.getAllPresets().take(MAX_PRESETS)
+            app.repository.getSortedPresets().take(MAX_PRESETS)
         } catch (e: Exception) {
             emptyList()
         }
@@ -97,7 +97,7 @@ class PresetWidget : GlanceAppWidget() {
             // Fetch fresh data from database
             val presets: List<MacroPreset> = try {
                 val app = context.applicationContext as MacroPadApplication
-                app.repository.getAllPresets().take(MAX_PRESETS)
+                app.repository.getSortedPresets().take(MAX_PRESETS)
             } catch (e: Exception) {
                 emptyList()
             }

@@ -40,9 +40,12 @@ private val MacroPadColorScheme = darkColorScheme(
     surfaceVariant = SurfaceAlt,
     onSurfaceVariant = TextMuted,
 
-    // Outline colors
-    outline = Border,
-    outlineVariant = BorderLight,
+    // Outline colors.
+    // The app uses `outline` as its secondary *text* colour throughout, not just for
+    // borders, so it has to stay legible on a black background — #222 rendered
+    // supporting text effectively invisible.
+    outline = TextMuted,
+    outlineVariant = Border,
 
     // Error colors
     error = Red,

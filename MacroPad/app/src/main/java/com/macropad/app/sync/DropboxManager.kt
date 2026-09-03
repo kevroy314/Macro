@@ -11,8 +11,10 @@ import com.dropbox.core.v2.files.WriteMode
 import com.google.gson.GsonBuilder
 import com.macropad.app.BuildConfig
 import com.macropad.app.data.entity.DailyMacro
+import com.macropad.app.data.entity.MacroEntry
 import com.macropad.app.data.entity.MacroPreset
 import com.macropad.app.data.entity.MacroTarget
+import com.macropad.app.data.entity.PresetDisplaySettings
 import com.macropad.app.data.entity.WidgetSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -259,14 +261,35 @@ class DropboxManager(private val context: Context) {
  * Complete backup data structure
  */
 data class BackupData(
-    val version: Int = 3,
+    val version: Int = CURRENT_VERSION,
     val exportDate: String = java.time.LocalDateTime.now().toString(),
     val deviceId: String = "",
     val targets: MacroTarget? = null,
     val widgetSettings: WidgetSettings? = null,
-    val presets: List<MacroPreset> = emptyList(),
-    val dailyMacros: List<DailyMacro> = emptyList()
-)
+
+    // Everything below is nullable on purpose. Gson allocates the object without
+    // running the Kotlin constructor, so a default like `emptyList()` is NOT applied
+    // to a field the JSON omits — it lands as null and the first iteration throws.
+    // Version 3 files predate the last three fields, so they must survive being null.
+    val presets: List<MacroPreset>? = null,
+    val dailyMacros: List<DailyMacro>? = null,
+
+    /** Version 4: the per-entry log behind the History timeline. */
+    val macroEntries: List<MacroEntry>? = null,
+    /** Version 4: preset sort mode and the AI/manual split. */
+    val presetDisplaySettings: PresetDisplaySettings? = null
+) {
+    val presetList: List<MacroPreset> get() = presets ?: emptyList()
+    val dailyMacroList: List<DailyMacro> get() = dailyMacros ?: emptyList()
+    val entryList: List<MacroEntry> get() = macroEntries ?: emptyList()
+
+    /** A v3 backup carries daily totals but no individual entries. */
+    val hasEntryHistory: Boolean get() = version >= 4
+
+    companion object {
+        const val CURRENT_VERSION = 4
+    }
+}
 
 sealed class SyncResult {
     data class Success(val message: String) : SyncResult()
