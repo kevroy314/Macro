@@ -61,6 +61,7 @@ fun SettingsScreen(
     onSaveAiSettings: (AiSettings) -> Unit,
     onTestAiConnection: suspend (url: String, apiKey: String, certPin: String) -> AiCallResult<String>,
     onDiscoverServer: suspend () -> String? = { null },
+    onSetAutoBackup: (Boolean) -> Unit = {},
     getAllMacros: suspend () -> List<DailyMacro>,
     getAllPresets: suspend () -> List<MacroPreset>,
     getTarget: suspend () -> MacroTarget,
@@ -208,7 +209,8 @@ fun SettingsScreen(
                 settingsFlow = aiSettingsFlow,
                 backup = app.serverBackup,
                 migration = app.dropboxMigration,
-                dropboxLinked = app.dropboxManager.isLinked
+                dropboxLinked = app.dropboxManager.isLinked,
+                onSetAutoBackup = onSetAutoBackup
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -1119,7 +1121,8 @@ fun ServerBackupCard(
     settingsFlow: Flow<AiSettings?>,
     backup: ServerBackup,
     migration: DropboxMigration,
-    dropboxLinked: Boolean
+    dropboxLinked: Boolean,
+    onSetAutoBackup: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val settings by settingsFlow.collectAsState(initial = null)
@@ -1169,6 +1172,44 @@ fun ServerBackupCard(
             status?.let {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall)
+            }
+
+            // A backup nobody remembers to take is out of date when the phone dies.
+            val staleDays = meta?.takeIf { it.exists }?.let {
+                (System.currentTimeMillis() - it.updatedAt) / 86_400_000L
+            }
+            if (!current.autoBackup && (staleDays == null || staleDays >= 7)) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = if (staleDays == null) {
+                        "Nothing is backed up. If you lose this phone, your history goes with it."
+                    } else {
+                        "Last backup was $staleDays days ago."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Back up daily", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Automatically, whenever your server is reachable.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+                Switch(
+                    checked = current.autoBackup,
+                    onCheckedChange = { on -> onSetAutoBackup(on) },
+                    enabled = current.isConfigured
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

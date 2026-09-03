@@ -11,6 +11,11 @@ import com.macropad.app.data.repository.MacroRepository
 import com.macropad.app.sync.DropboxMigration
 import com.macropad.app.sync.DropboxManager
 import com.macropad.app.sync.ServerBackup
+import com.macropad.app.sync.ServerBackupWorker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class MacroPadApplication : Application() {
     val database by lazy { MacroPadDatabase.getDatabase(this) }
@@ -41,5 +46,14 @@ class MacroPadApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AiNotifications.createChannels(this)
+
+        // WorkManager keeps periodic work across restarts, but re-declaring it here
+        // means a reinstall or a cleared job store still ends up matching the setting.
+        applicationScope.launch {
+            val settings = repository.getAiSettings()
+            ServerBackupWorker.sync(this@MacroPadApplication, settings.autoBackup && settings.isConfigured)
+        }
     }
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 }

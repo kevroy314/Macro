@@ -34,7 +34,17 @@ data class AiSettings(
     /** Log the estimate as soon as it lands, then adjust when a follow-up is answered. */
     val autoApply: Boolean = true,
 
-    val lastPolledServerTime: Long = 0
+    val lastPolledServerTime: Long = 0,
+
+    /**
+     * Back up to the server once a day without being asked.
+     *
+     * Off by default, because it makes the app talk to the server on its own
+     * schedule rather than when you tap something. Worth turning on: a backup you
+     * have to remember to take is the one that is out of date when the phone dies.
+     */
+    val autoBackup: Boolean = false,
+    val lastAutoBackupAt: Long = 0
 ) {
     val isConfigured: Boolean
         get() = enabled && serverUrl.isNotBlank() && apiKey.isNotBlank()

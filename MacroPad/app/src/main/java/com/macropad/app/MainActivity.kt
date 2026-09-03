@@ -28,6 +28,7 @@ import com.macropad.app.ai.AiSyncManager
 import com.macropad.app.ai.PlanningManager
 import com.macropad.app.ai.PresetTagger
 import com.macropad.app.ai.SetupLink
+import com.macropad.app.sync.ServerBackupWorker
 import com.macropad.app.data.entity.AiJob
 import com.macropad.app.data.entity.DailyMacro
 import com.macropad.app.data.entity.MacroPreset
@@ -584,6 +585,14 @@ fun MainScreen(
                         aiSyncManager.testConnection(url, key, pin)
                     },
                     onDiscoverServer = { aiSyncManager.rediscoverServer() },
+                    onSetAutoBackup = { on ->
+                        scope.launch {
+                            repository.saveAiSettings(
+                                repository.getAiSettings().copy(autoBackup = on)
+                            )
+                            ServerBackupWorker.sync(context, on)
+                        }
+                    },
                     getAllMacros = { repository.getAllMacros() },
                     getAllPresets = { repository.getAllPresets() },
                     getTarget = { repository.getTarget() },
