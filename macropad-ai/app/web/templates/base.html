@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}MacroPad AI{% endblock %}</title>
+<style>
+  :root {
+    --bg: #000; --surface: #0d0d0d; --raised: #1a1a1a; --border: #222;
+    --text: #e0e0e0; --muted: #9ca3af; --dim: #888;
+    --accent: #a78bfa; --protein: #4ade80; --carbs: #22d3ee;
+    --fat: #fbbf24; --cal: #f472b6; --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    border-bottom: 1px solid var(--border); padding: 16px 20px;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
+  header .meta { color: var(--dim); font-size: 13px; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .spread { justify-content: space-between; }
+  .pill {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border);
+    background: var(--raised); color: var(--muted); white-space: nowrap;
+  }
+  .pill.running, .pill.queued { color: var(--carbs); border-color: #164e63; }
+  .pill.needs_input { color: var(--fat); border-color: #713f12; }
+  .pill.completed { color: var(--protein); border-color: #14532d; }
+  .pill.failed, .pill.cancelled { color: var(--red); border-color: #7f1d1d; }
+  .pill.superseded { color: var(--dim); }
+  .macros { display: flex; gap: 14px; font-variant-numeric: tabular-nums; }
+  .macros b { font-weight: 600; }
+  .p { color: var(--protein); } .c { color: var(--carbs); }
+  .f { color: var(--fat); } .kcal { color: var(--cal); }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); font-size: 13px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .07em;
+       color: var(--muted); margin: 26px 0 10px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--dim); font-weight: 500; font-size: 12px;
+       text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; }
+  pre { background: var(--raised); border: 1px solid var(--border); border-radius: 8px;
+        padding: 12px; overflow-x: auto; font-size: 13px; margin: 0; }
+  .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+  .thumbs img { max-height: 220px; border-radius: 8px; border: 1px solid var(--border); }
+  button {
+    background: var(--raised); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: #444; }
+  button.danger { color: var(--red); }
+  .empty { color: var(--dim); text-align: center; padding: 48px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="/" style="color:var(--text)">MacroPad&nbsp;AI</a></h1>
+  {% block header_meta %}{% endblock %}
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ job.result.preset_name if job.result else 'Job' }} — MacroPad AI{% endblock %}
+
+{% block header_meta %}
+<span class="meta"><a href="/">&larr; all jobs</a></span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row spread">
+    <span class="pill {{ job.status }}">{{ job.status.replace('_', ' ') }}</span>
+    <span class="dim js-time" data-ts="{{ job.created_at }}">{{ job.created_at }}</span>
+  </div>
+  {% if job.prompt_text %}
+  <p style="margin:12px 0 0">{{ job.prompt_text }}</p>
+  {% endif %}
+  {% if job.error %}
+  <p style="margin:12px 0 0; color:var(--red)">{{ job.error }}</p>
+  {% endif %}
+  <div class="dim" style="margin-top:10px">
+    threshold: {{ job.threshold_value }}{{ '%' if job.threshold_mode == 'percent' else ' kcal' }}
+    {% if job.revision %} &middot; revision {{ job.revision }}{% endif %}
+    {% if job.cost_usd %} &middot; ${{ '%.3f'|format(job.cost_usd) }}{% endif %}
+    {% if job.parent_job_id %}
+      &middot; retry of <a href="/jobs/{{ job.parent_job_id }}">{{ job.parent_job_id[:8] }}</a>
+    {% endif %}
+  </div>
+  {% if job.status in ('queued', 'running') %}
+  <div style="margin-top:12px">
+    <button class="danger" onclick="cancelJob()">Cancel</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if images %}
+<h2>Images</h2>
+<div class="thumbs">
+  {% for name in images %}
+  <a href="/jobs/{{ job.id }}/images/{{ name }}" target="_blank">
+    <img src="/jobs/{{ job.id }}/images/{{ name }}" alt="{{ name }}">
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if job.result %}
+<h2>Estimate — {{ job.result.preset_name }}</h2>
+<div class="card">
+  <table>
+    <tr>
+      <th>Item</th><th>Portion</th>
+      <th class="num">P</th><th class="num">C</th><th class="num">F</th>
+      <th>Confidence</th>
+    </tr>
+    {% for item in job.result['items'] %}
+    <tr>
+      <td>{{ item.name }}{% if item.assumptions %}<div class="dim">{{ item.assumptions }}</div>{% endif %}</td>
+      <td class="muted">{{ item.qty }}</td>
+      <td class="num p">{{ item.protein_g }}</td>
+      <td class="num c">{{ item.carbs_g }}</td>
+      <td class="num f">{{ item.fat_g }}</td>
+      <td class="dim">{{ item.confidence }}</td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td colspan="2"><b>Total</b></td>
+      <td class="num p"><b>{{ job.result.total.protein_g }}</b></td>
+      <td class="num c"><b>{{ job.result.total.carbs_g }}</b></td>
+      <td class="num f"><b>{{ job.result.total.fat_g }}</b></td>
+      <td class="kcal"><b>{{ job.result.total.calories }}</b> kcal</td>
+    </tr>
+  </table>
+  {% if job.result.summary %}
+  <p class="muted" style="margin:14px 0 0">{{ job.result.summary }}</p>
+  {% endif %}
+</div>
+
+{% if job.result.sources %}
+<h2>Sources</h2>
+<div class="card">
+  {% for source in job.result.sources %}
+  <div style="margin-bottom:4px"><a href="{{ source }}" target="_blank" rel="noreferrer">{{ source }}</a></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if job.result.follow_up_questions %}
+<h2>Awaiting answers</h2>
+<div class="card">
+  {% for question in job.result.follow_up_questions %}
+  <div style="margin-bottom:10px">
+    <div>{{ question.question }}</div>
+    <div class="dim">{{ question.why }} (&plusmn;{{ question.est_calorie_swing|round|int }} kcal)</div>
+  </div>
+  {% endfor %}
+  <div class="dim">Answer from the notification on your phone.</div>
+</div>
+{% endif %}
+{% endif %}
+
+{% if job.answers %}
+<h2>Answers given</h2>
+<div class="card">
+  {% for answer in job.answers %}
+  <div style="margin-bottom:8px">
+    <div class="muted">{{ answer.question }}</div>
+    <div>{{ answer.answer }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Session</h2>
+<div class="card">
+  {% for entry in transcript %}
+    {% if entry.content %}
+      {% for part in entry.content %}
+        {% if part.kind == 'text' and part.text %}
+          <p style="margin:0 0 10px">{{ part.text }}</p>
+        {% elif part.kind == 'tool_use' %}
+          <div class="dim" style="margin:0 0 6px">
+            {{ part.name }}
+            {% if part.input and part.input.get('url') %}&rarr; {{ part.input['url'] }}
+            {% elif part.input and part.input.get('query') %}&rarr; {{ part.input['query'] }}
+            {% elif part.input and part.input.get('file_path') %}&rarr; {{ part.input['file_path'] }}
+            {% endif %}
+          </div>
+        {% elif part.kind == 'ServerToolUseBlock' %}
+          <div class="dim" style="margin:0 0 6px">{{ part.name }}</div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% else %}
+    <div class="dim">No transcript recorded.</div>
+  {% endfor %}
+</div>
+
+<h2>Events</h2>
+<div class="card">
+  {% for event in job.events %}
+  <div class="dim">
+    <span class="js-time" data-ts="{{ event.ts }}">{{ event.ts }}</span>
+    &middot; {{ event.kind }}{% if event.detail %} &middot; {{ event.detail }}{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+  for (const el of document.querySelectorAll('.js-time')) {
+    const ts = Number(el.dataset.ts);
+    if (ts) el.textContent = new Date(ts).toLocaleString();
+  }
+  async function cancelJob() {
+    await fetch('/jobs/{{ job.id }}/cancel-web', { method: 'POST' });
+    location.reload();
+  }
+  {% if job.status in ('queued', 'running') %}
+  setTimeout(() => location.reload(), 5000);
+  {% endif %}
+</script>
+{% endblock %}

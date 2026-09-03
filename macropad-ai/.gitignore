@@ -1,0 +1,8 @@
+data/macropad.db
+data/macropad.db-wal
+data/macropad.db-shm
+data/apikey
+data/jobs/
+data/env
+data/releases/
+data/backups/

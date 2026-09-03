@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}MacroPad AI — job log{% endblock %}
+
+{% block header_meta %}
+<span class="meta">{{ model }}</span>
+<span class="meta">{{ active }} active</span>
+{% if viewer %}<span class="meta">{{ viewer.name }}</span>{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if release %}
+<div class="card">
+  <div class="row spread">
+    <div>
+      <b>MacroPad {{ release.version_name }}</b>
+      <span class="dim">build {{ release.version_code }}</span>
+      {% if release.notes %}<div class="dim">{{ release.notes }}</div>{% endif %}
+    </div>
+    <a href="/api/v1/release/download/{{ release.file }}?key={{ api_key }}">
+      Download APK ({{ (release.size_bytes / 1048576) | round(1) }} MB)
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{% if not viewer %}
+  <p class="empty">
+    Your sign-in isn't linked to a MacroPad user, so there's nothing to show.<br>
+    <span class="dim">Add the address to data/users.json to see your own log.</span>
+  </p>
+{% elif not jobs %}
+  <p class="empty">No jobs yet. Log something from the app.</p>
+{% endif %}
+
+{% for job in jobs %}
+<div class="card">
+  <div class="row spread">
+    <div class="row">
+      <span class="pill {{ job.status }}">{{ job.status.replace('_', ' ') }}</span>
+      <a href="/jobs/{{ job.id }}">
+        {% if job.result and job.result.preset_name %}{{ job.result.preset_name }}
+        {% elif job.prompt_text %}{{ job.prompt_text[:70] }}
+        {% else %}{{ job.image_count }} image(s){% endif %}
+      </a>
+    </div>
+    {% if job.result %}
+    <div class="macros">
+      <span class="p"><b>{{ job.result.total.protein_g }}</b>p</span>
+      <span class="c"><b>{{ job.result.total.carbs_g }}</b>c</span>
+      <span class="f"><b>{{ job.result.total.fat_g }}</b>f</span>
+      <span class="kcal"><b>{{ job.result.total.calories }}</b> kcal</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if job.result and job.result.summary %}
+  <div class="dim" style="margin-top:6px">{{ job.result.summary }}</div>
+  {% endif %}
+  {% if job.error %}
+  <div class="dim" style="margin-top:6px; color:var(--red)">{{ job.error }}</div>
+  {% endif %}
+
+  <div class="dim" style="margin-top:8px">
+    <span class="js-time" data-ts="{{ job.created_at }}">{{ job.created_at }}</span>
+    {% if job.image_count %} &middot; {{ job.image_count }} image(s){% endif %}
+    {% if job.result and job.result.follow_up_questions %}
+      &middot; {{ job.result.follow_up_questions|length }} question(s) pending
+    {% endif %}
+    {% if job.cost_usd %} &middot; ${{ '%.3f'|format(job.cost_usd) }}{% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% if usage | length > 1 %}
+<div class="card">
+  <div class="dim">Shared usage on this machine</div>
+  {% for row in usage %}
+  <div class="row spread" style="margin-top:4px">
+    <span>{{ row.owner or 'unowned' }}</span>
+    <span class="dim">{{ row.jobs }} jobs &middot; ${{ '%.2f'|format(row.cost) }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+  for (const el of document.querySelectorAll('.js-time')) {
+    const ts = Number(el.dataset.ts);
+    if (ts) el.textContent = new Date(ts).toLocaleString();
+  }
+  // Anything in flight will change on its own; a slow refresh is enough.
+  if (document.querySelector('.pill.running, .pill.queued')) {
+    setTimeout(() => location.reload(), 5000);
+  }
+</script>
+{% endblock %}
