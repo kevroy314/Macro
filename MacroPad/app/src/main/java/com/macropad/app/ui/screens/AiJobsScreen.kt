@@ -301,7 +301,6 @@ private fun AiJobCard(
             AgentSteps(
                 stepsJson = job.steps,
                 running = job.isActive,
-                liveLine = job.progress
             )
 
             if (imagePaths.isNotEmpty()) {

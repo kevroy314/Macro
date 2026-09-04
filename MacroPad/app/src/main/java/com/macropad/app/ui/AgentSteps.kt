@@ -45,19 +45,18 @@ fun parseSteps(json: String?): List<AiStep> {
 /**
  * What the agent did, on the way to its answer.
  *
- * Open while it works, so a long run is legible rather than looking stuck, and
- * collapsed once it finishes — at that point the answer is the point, and the working
- * is there for anyone who wants to see how much went into it.
+ * A spinner, the steps, and nothing else. Open while it works so a long run is
+ * legible rather than looking stuck; collapsed once it finishes, when the answer
+ * becomes the point and the working is there for anyone who wants it.
  */
 @Composable
 fun AgentSteps(
     stepsJson: String,
     running: Boolean,
-    liveLine: String = "",
     modifier: Modifier = Modifier
 ) {
     val steps = remember(stepsJson) { parseSteps(stepsJson) }
-    if (steps.isEmpty() && liveLine.isBlank()) return
+    if (steps.isEmpty() && !running) return
 
     var expanded by remember { mutableStateOf(running) }
 
@@ -85,11 +84,9 @@ fun AgentSteps(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
-                // Collapsed, the header carries the current step so the row is not
-                // just a number. Expanded, the list says it, so the header counts.
+                // No status line. The step in progress is the last entry in the list,
+                // so a separate "currently doing" line can only ever repeat it.
                 text = when {
-                    !expanded && running && liveLine.isNotBlank() -> liveLine
-                    !expanded && running -> "Working"
                     steps.isEmpty() -> "Working"
                     steps.size == 1 -> "1 step"
                     else -> "${steps.size} steps"
@@ -123,9 +120,7 @@ fun AgentSteps(
                         )
                     }
                 }
-                // Nothing here: the step in progress is already the last entry in
-                // the list. Printing liveLine as well showed it twice, which is what
-                // the current step looked like duplicated.
+
             }
         }
     }
