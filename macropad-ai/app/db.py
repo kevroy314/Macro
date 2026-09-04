@@ -98,6 +98,10 @@ def _add_progress_column(conn: sqlite3.Connection) -> None:
             conn.execute(
                 f"ALTER TABLE {table} ADD COLUMN progress TEXT NOT NULL DEFAULT ''"
             )
+        # The steps taken so far, as a JSON array. Kept alongside the live line so
+        # the work stays visible after the run finishes.
+        if "steps" not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
 
 
 def _add_owner_columns(conn: sqlite3.Connection) -> None:
@@ -224,6 +228,16 @@ def update_job(job_id: str, **fields: Any) -> None:
     )
 
 
+def _steps_of(row: dict[str, Any]) -> list[dict[str, Any]]:
+    if "steps" not in row.keys() or not row["steps"]:
+        return []
+    try:
+        parsed = json.loads(row["steps"])
+        return parsed if isinstance(parsed, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
 def set_status(job_id: str, status: str, detail: str | None = None) -> None:
     fields: dict[str, Any] = {"status": status}
     if status != STATUS_RUNNING:
@@ -292,8 +306,9 @@ def job_to_api(job: dict[str, Any], include_events: bool = False) -> dict[str, A
         "client_job_id": job["client_job_id"],
         "parent_job_id": job["parent_job_id"],
         "status": job["status"],
-        # What the run is doing right now. Empty unless it is working.
+        # What the run is doing right now, and everything it has done.
         "progress": job["progress"] if "progress" in job.keys() else "",
+        "steps": _steps_of(job),
         "prompt_text": job["prompt_text"],
         "threshold_mode": job["threshold_mode"],
         "threshold_value": job["threshold_value"],
@@ -442,8 +457,9 @@ def thread_to_api(thread: dict[str, Any], include_messages: bool = False) -> dic
         "cost_usd": thread["cost_usd"],
         "created_at": thread["created_at"],
         "updated_at": thread["updated_at"],
-        # What the turn is doing right now. Empty when idle.
+        # What the turn is doing right now, and everything it has done.
         "progress": thread["progress"] if "progress" in thread.keys() else "",
+        "steps": _steps_of(thread),
     }
     if include_messages:
         out["messages"] = [

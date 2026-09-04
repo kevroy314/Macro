@@ -167,6 +167,7 @@ class PlanningManager(
                 title = server.title.ifBlank { local.title },
                 status = server.status,
             progress = server.progress,
+            steps = gson.toJson(server.steps),
                 error = server.error,
                 serverUpdatedAt = maxOf(local.serverUpdatedAt, server.updatedAt)
             )

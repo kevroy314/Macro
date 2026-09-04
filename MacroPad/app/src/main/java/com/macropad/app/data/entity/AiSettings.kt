@@ -37,6 +37,14 @@ data class AiSettings(
     val lastPolledServerTime: Long = 0,
 
     /**
+     * The notes for the build being installed, kept across the install so the app can
+     * say what changed once it is running — knowing beforehand is only half of it.
+     * Cleared once the user has seen them.
+     */
+    val lastUpdateNotes: String = "",
+    val lastUpdateVersionCode: Int = 0,
+
+    /**
      * Back up to the server once a day without being asked.
      *
      * On by default once a server is configured — a maintainer decision, recorded in

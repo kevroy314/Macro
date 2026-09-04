@@ -249,6 +249,7 @@ class AiSyncManager(
             parentJobId = server.parentJobId ?: local.parentJobId,
             status = server.status,
             progress = server.progress,
+            steps = gson.toJson(server.steps),
             revision = server.revision,
             error = server.error,
             resultJson = resultJson ?: local.resultJson,

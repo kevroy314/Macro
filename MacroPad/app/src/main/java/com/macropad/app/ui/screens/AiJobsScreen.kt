@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.macropad.app.data.entity.AiAnsweredQuestion
 import com.macropad.app.data.entity.AiJob
+import com.macropad.app.ui.AgentSteps
 import com.macropad.app.data.entity.AiQuestion
 import com.macropad.app.data.entity.AiResult
 import com.macropad.app.ui.theme.CaloriesColor
@@ -101,7 +102,7 @@ fun AiJobsScreen(
                     onClick = onNewEntry,
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
-                    Icon(Icons.Default.AddAPhoto, contentDescription = "New AI entry")
+                    Icon(Icons.Default.AutoAwesome, contentDescription = "New AI entry")
                 }
             }
         }
@@ -172,7 +173,7 @@ fun AiJobsScreen(
         var correction by remember(job.clientJobId) { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { correcting = null },
-            title = { Text("What did it get wrong?") },
+            title = { Text("Revise this estimate") },
             text = {
                 Column {
                     Text(
@@ -293,24 +294,15 @@ private fun AiJobCard(
                 )
             }
 
-            // What it is doing right now, straight from the agent's stream. Without
-            // this a running estimate shows nothing for a couple of minutes, which
-            // is indistinguishable from being stuck.
-            job.progress.takeIf { it.isNotBlank() && job.isActive }?.let { line ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp).padding(top = 2.dp),
-                        strokeWidth = 1.5.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            }
+            // What it did, and what it is doing. Open while it runs so a long
+            // estimate is legible; collapsed afterwards, where it becomes a record
+            // of how much work went into the number.
+            Spacer(modifier = Modifier.height(8.dp))
+            AgentSteps(
+                stepsJson = job.steps,
+                running = job.isActive,
+                liveLine = job.progress
+            )
 
             if (imagePaths.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -497,7 +489,7 @@ private fun AiJobCard(
                     // Correcting is the common need — it got the portion or the item
                     // wrong — and it costs one turn instead of researching again.
                     if (job.serverJobId != null) {
-                        TextButton(onClick = onCorrect) { Text("Correct") }
+                        TextButton(onClick = onCorrect) { Text("Revise") }
                     }
                     if (job.appliedEntryId != null) {
                         // Named, not an eye icon. Nobody guesses what the eye means,

@@ -22,7 +22,9 @@ data class AiThread(
     val updatedAt: Long = System.currentTimeMillis(),
     val serverUpdatedAt: Long = 0,
     /** What the assistant is doing right now, while [isBusy]. Empty when idle. */
-    val progress: String = ""
+    val progress: String = "",
+    /** Everything it has done, as a JSON array of {at, text}. Survives completion. */
+    val steps: String = "[]"
 ) {
     val isBusy: Boolean
         get() = status == STATUS_RUNNING || status == STATUS_SENDING

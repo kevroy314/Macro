@@ -321,7 +321,8 @@ private fun ThresholdPicker(
 
 private const val MAX_IMAGES = 6
 
-private fun createCaptureUri(context: Context): Uri {
+/** Shared with the planning composer, which offers the same camera button. */
+internal fun createCaptureUri(context: Context): Uri {
     val dir = File(context.cacheDir, "ai_captures").apply { mkdirs() }
     val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

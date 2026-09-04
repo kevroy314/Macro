@@ -35,7 +35,10 @@ import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
 import com.macropad.app.net.ServerBackupMeta
+import com.macropad.app.net.ServerRelease
 import com.macropad.app.net.ServerBackupVersion
+import androidx.compose.runtime.DisposableEffect
+import com.macropad.app.BuildConfig
 import com.macropad.app.ai.LanDiscovery
 import com.macropad.app.sync.DropboxMigration
 import com.macropad.app.sync.BackupData
@@ -63,6 +66,8 @@ fun SettingsScreen(
     onTestAiConnection: suspend (url: String, apiKey: String, certPin: String) -> AiCallResult<String>,
     onDiscoverServer: suspend () -> String? = { null },
     onSetAutoBackup: (Boolean) -> Unit = {},
+    onRememberUpdateNotes: suspend (ServerRelease) -> Unit = {},
+    onDismissWhatsNew: () -> Unit = {},
     getAllMacros: suspend () -> List<DailyMacro>,
     getAllPresets: suspend () -> List<MacroPreset>,
     getTarget: suspend () -> MacroTarget,
@@ -201,7 +206,22 @@ fun SettingsScreen(
         // Over-the-air updates, only when a server is configured to serve them.
         val aiSettingsForUpdates by aiSettingsFlow.collectAsState(initial = null)
         if (aiSettingsForUpdates?.isConfigured == true) {
-            AppUpdateCard(updater = app.appUpdater)
+            val settingsNow = aiSettingsForUpdates
+            if (settingsNow != null &&
+                settingsNow.lastUpdateNotes.isNotBlank() &&
+                settingsNow.lastUpdateVersionCode == BuildConfig.VERSION_CODE
+            ) {
+                WhatsNewCard(
+                    notes = settingsNow.lastUpdateNotes,
+                    versionName = BuildConfig.VERSION_NAME,
+                    onDismiss = { onDismissWhatsNew() }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            AppUpdateCard(
+                updater = app.appUpdater,
+                onRememberNotes = onRememberUpdateNotes
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -948,8 +968,33 @@ fun SyncSettingsDialog(
  * `build_release.sh` publishes each signed build to the server, so upgrading is a
  * download and a tap rather than a cable and an adb command.
  */
+/** What changed in the build that is running, shown once after an update. */
 @Composable
-fun AppUpdateCard(updater: AppUpdater) {
+fun WhatsNewCard(notes: String, versionName: String, onDismiss: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.NewReleases, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "What's new in $versionName",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(notes, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onDismiss) { Text("Got it") }
+        }
+    }
+}
+
+@Composable
+fun AppUpdateCard(
+    updater: AppUpdater,
+    onRememberNotes: suspend (ServerRelease) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<AppUpdater.State>(AppUpdater.State.Idle) }
@@ -1075,20 +1120,33 @@ fun AppUpdateCard(updater: AppUpdater) {
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                    // Re-read the permission when the screen comes back. It is
+                    // granted in another activity, so nothing Compose observes
+                    // changes and the button would otherwise still say "allow"
+                    // after the user just did.
+                    val lifecycleOwner = LocalLifecycleOwner.current
+                    var canInstall by remember { mutableStateOf(updater.canInstallPackages()) }
+                    DisposableEffect(lifecycleOwner) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_RESUME) {
+                                canInstall = updater.canInstallPackages()
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    }
+
                     Button(onClick = {
+                        // Keep the notes for after the restart: "what changed" is at
+                        // least as useful once you are running the new build.
+                        scope.launch { onRememberNotes(current.release) }
                         if (!updater.install(current.file)) {
                             // Android needs explicit permission for this app to be an
                             // install source; send them to the right settings page.
                             context.startActivity(updater.unknownSourcesIntent())
                         }
                     }) {
-                        Text(
-                            if (updater.canInstallPackages()) {
-                                "Install"
-                            } else {
-                                "Allow installs, then return"
-                            }
-                        )
+                        Text(if (canInstall) "Install" else "Allow installs, then return")
                     }
                 }
 

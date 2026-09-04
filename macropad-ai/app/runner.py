@@ -248,7 +248,9 @@ class JobRunner:
         final_text = ""
         auth_error: str | None = None
 
-        live = LiveProgress()
+        # Carry over what earlier passes did: answering a question or sending a
+        # correction is more work on the same estimate, not a fresh start.
+        live = LiveProgress(previous=db._steps_of(job))
 
         async with ClaudeSDKClient(options=options) as client:
             self._clients[job_id] = client
@@ -260,7 +262,9 @@ class JobRunner:
                 if isinstance(message, StreamEvent):
                     live.observe(message.event or {})
                     if live.should_write(db.now_ms()):
-                        db.update_job(job_id, progress=live.line())
+                        db.update_job(
+                            job_id, progress=live.line(), steps=live.steps_json()
+                        )
                     continue
 
                 if isinstance(message, SystemMessage):
@@ -282,6 +286,7 @@ class JobRunner:
                     db.update_job(
                         job_id,
                         progress="",
+                        steps=live.steps_json(),
                         session_id=message.session_id,
                         cost_usd=message.total_cost_usd,
                         num_turns=message.num_turns,
@@ -411,9 +416,13 @@ class LiveProgress:
     #: Only the tail is kept — this is a status line, not the transcript.
     MAX_CHARS = 400
 
-    def __init__(self) -> None:
+    #: A cap on the step list. A long run can search a dozen times; nobody reads more.
+    MAX_STEPS = 40
+
+    def __init__(self, previous: list[dict[str, Any]] | None = None) -> None:
         self.text = ""
         self.status = ""
+        self.steps: list[dict[str, Any]] = list(previous or [])
         self._last_write = 0.0
 
     def observe(self, event: dict[str, Any]) -> None:
@@ -424,8 +433,10 @@ class LiveProgress:
             block = event.get("content_block") or {}
             if block.get("type") == "tool_use":
                 self.status = _tool_note(block.get("name"), block.get("input"))
+                self._record(self.status)
             elif block.get("type") == "thinking":
                 self.status = "Thinking"
+                self._record("Thinking")
             return
 
         if kind == "content_block_delta":
@@ -434,6 +445,23 @@ class LiveProgress:
                 self.text += delta.get("text") or ""
             elif delta.get("type") == "thinking_delta":
                 self.status = "Thinking"
+
+    def _record(self, text: str) -> None:
+        """Keep the step, so the work is still visible once the run is over.
+
+        Consecutive duplicates are folded — a long answer can start several thinking
+        blocks in a row, and "Thinking" five times says nothing "Thinking" once does
+        not.
+        """
+        if not text:
+            return
+        if self.steps and self.steps[-1]["text"] == text:
+            return
+        self.steps.append({"at": db.now_ms(), "text": text})
+        del self.steps[: max(0, len(self.steps) - self.MAX_STEPS)]
+
+    def steps_json(self) -> str:
+        return json.dumps(self.steps)
 
     def line(self) -> str:
         """What to show: the answer so far, else the latest status."""
@@ -566,7 +594,7 @@ class ThreadRunner:
             self._clients[thread_id] = client
             await client.query(prompt)
 
-            live = LiveProgress()
+            live = LiveProgress(previous=db._steps_of(thread))
 
             async for message in client.receive_response():
                 _append_transcript(directory / "transcript.jsonl", message)
@@ -574,7 +602,9 @@ class ThreadRunner:
                 if isinstance(message, StreamEvent):
                     live.observe(message.event or {})
                     if live.should_write(db.now_ms()):
-                        db.update_thread(thread_id, progress=live.line())
+                        db.update_thread(
+                            thread_id, progress=live.line(), steps=live.steps_json()
+                        )
                     continue
 
                 if isinstance(message, SystemMessage) and message.subtype == "init":
@@ -606,7 +636,7 @@ class ThreadRunner:
         if raw_result is None:
             raise schema.ResultError("the assistant did not return a reply")
 
-        db.update_thread(thread_id, progress="")
+        db.update_thread(thread_id, progress="", steps=live.steps_json())
         parsed = schema.normalise_planning(raw_result)
 
         db.add_message(

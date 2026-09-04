@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -26,6 +27,7 @@ import coil.compose.AsyncImage
 import com.macropad.app.data.entity.AiProposal
 import com.macropad.app.data.entity.AiThread
 import com.macropad.app.data.entity.AiThreadMessage
+import com.macropad.app.ui.AgentSteps
 import com.macropad.app.ui.MarkdownText
 import com.macropad.app.ui.theme.CaloriesColor
 import com.macropad.app.ui.theme.CarbsColor
@@ -60,6 +62,18 @@ fun PlanningThreadScreen(
     val pendingImages = remember { mutableStateListOf<Uri>() }
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = pendingCameraUri
+        // Planning takes photos too — you are just as likely to be standing in front
+        // of the thing you are asking about as describing it from memory.
+        if (success && uri != null) pendingImages.add(uri)
+        pendingCameraUri = null
+    }
 
     val pickImages = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(4)
@@ -172,6 +186,11 @@ fun PlanningThreadScreen(
                             )
                         }
                     }
+                    AgentSteps(
+                        stepsJson = thread?.steps ?: "[]",
+                        running = busy,
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+                    )
                 }
             }
         }
@@ -223,13 +242,23 @@ fun PlanningThreadScreen(
         ) {
             IconButton(
                 onClick = {
+                    val uri = createCaptureUri(context)
+                    pendingCameraUri = uri
+                    takePicture.launch(uri)
+                },
+                enabled = !busy
+            ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = "Take a photo")
+            }
+            IconButton(
+                onClick = {
                     pickImages.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
                 enabled = !busy
             ) {
-                Icon(Icons.Default.Image, contentDescription = "Attach photo")
+                Icon(Icons.Default.Image, contentDescription = "Attach a photo")
             }
             OutlinedTextField(
                 value = draft,

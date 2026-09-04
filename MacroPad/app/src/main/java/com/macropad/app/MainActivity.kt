@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.glance.appwidget.updateAll
@@ -176,6 +177,17 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val application = LocalContext.current.applicationContext as MacroPadApplication
+    var updateAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Cheap: one call, only when a server is configured. The updater lives inside
+        // Settings, so without this nothing tells you a build is waiting.
+        val settings = repository.getAiSettings()
+        if (settings.isConfigured) {
+            updateAvailable = application.appUpdater.check().successOrNull != null
+        }
+    }
+
     val incomingSetup by pendingSetup.collectAsState()
     incomingSetup?.let { setup ->
         AlertDialog(
@@ -255,7 +267,17 @@ fun MainScreen(
                 NavigationBar {
                     screens.forEach { screen ->
                         NavigationBarItem(
-                            icon = screen.icon,
+                            icon = {
+                                // A dot on Settings when an update is waiting. The
+                                // updater lives inside Settings, so without this the
+                                // only way to learn about a new build is to go
+                                // looking for one.
+                                if (screen == Screen.Settings && updateAvailable) {
+                                    BadgedBox(badge = { Badge() }) { screen.icon() }
+                                } else {
+                                    screen.icon()
+                                }
+                            },
                             label = { Text(screen.title) },
                             selected = currentRoute == screen.route,
                             onClick = {
@@ -589,6 +611,23 @@ fun MainScreen(
                         aiSyncManager.testConnection(url, key, pin)
                     },
                     onDiscoverServer = { aiSyncManager.rediscoverServer() },
+                    onRememberUpdateNotes = { release ->
+                        val settings = repository.getAiSettings()
+                        repository.saveAiSettings(
+                            settings.copy(
+                                lastUpdateNotes = release.notes,
+                                lastUpdateVersionCode = release.versionCode
+                            )
+                        )
+                    },
+                    onDismissWhatsNew = {
+                        scope.launch {
+                            val settings = repository.getAiSettings()
+                            repository.saveAiSettings(
+                                settings.copy(lastUpdateNotes = "", lastUpdateVersionCode = 0)
+                            )
+                        }
+                    },
                     onSetAutoBackup = { on ->
                         scope.launch {
                             repository.saveAiSettings(

@@ -28,6 +28,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+/** One thing the agent did on the way to an answer. */
+data class AiStep(val at: Long = 0, val text: String = "")
+
 /** A job as the daemon reports it. */
 data class ServerJob(
     val id: String,
@@ -35,6 +38,7 @@ data class ServerJob(
     @SerializedName("parent_job_id") val parentJobId: String?,
     val status: String,
     val progress: String = "",
+    val steps: List<AiStep> = emptyList(),
     @SerializedName("prompt_text") val promptText: String = "",
     @SerializedName("threshold_mode") val thresholdMode: String = "percent",
     @SerializedName("threshold_value") val thresholdValue: Float = 10f,
@@ -114,6 +118,7 @@ data class ServerThread(
     val title: String = "",
     val status: String = "idle",
     val progress: String = "",
+    val steps: List<AiStep> = emptyList(),
     val error: String? = null,
     @SerializedName("cost_usd") val costUsd: Double? = null,
     @SerializedName("created_at") val createdAt: Long = 0,
