@@ -35,6 +35,7 @@ import com.macropad.app.data.entity.MacroTarget
 import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
 import com.macropad.app.net.ServerBackupMeta
+import com.macropad.app.net.ServerBackupVersion
 import com.macropad.app.ai.LanDiscovery
 import com.macropad.app.sync.DropboxMigration
 import com.macropad.app.sync.BackupData
@@ -1133,6 +1134,7 @@ fun ServerBackupCard(
     var working by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
     var migrationPreview by remember { mutableStateOf<DropboxMigration.Preview?>(null) }
+    var versions by remember { mutableStateOf<List<ServerBackupVersion>>(emptyList()) }
 
     suspend fun refresh() {
         meta = backup.meta().successOrNull
@@ -1235,7 +1237,14 @@ fun ServerBackupCard(
                 }
 
                 OutlinedButton(
-                    onClick = { confirmRestore = true },
+                    onClick = {
+                        working = true
+                        scope.launch {
+                            versions = backup.history()
+                            working = false
+                            confirmRestore = true
+                        }
+                    },
                     enabled = current.isConfigured && !working && meta?.exists == true
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1282,30 +1291,69 @@ fun ServerBackupCard(
     }
 
     if (confirmRestore) {
+        val stamp = remember { SimpleDateFormat("EEE d MMM, h:mm a", Locale.getDefault()) }
         AlertDialog(
             onDismissRequest = { confirmRestore = false },
             title = { Text("Restore from server") },
             text = {
-                Text(
-                    "This fills in anything the backup has that this phone doesn't, and " +
-                        "updates your targets and presets to match it. Days you've logged " +
-                        "since the backup are kept."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmRestore = false
-                    working = true
-                    status = "Restoring…"
-                    scope.launch {
-                        status = when (val result = backup.restore()) {
-                            is AiCallResult.Success -> if (result.value == 0) "Already up to date" else "Restored ${result.value} day(s)"
-                            is AiCallResult.Failure -> result.message
+                Column {
+                    Text(
+                        "This fills in anything the backup has that this phone doesn't. " +
+                            "Days you've logged since are kept, so nothing here is lost."
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (versions.isEmpty()) {
+                        Text(
+                            "Nothing is backed up yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    } else {
+                        Text(
+                            "Pick a point to restore from:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // Scrollable: the series can be a year deep.
+                        Column(modifier = Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+                            versions.forEach { version ->
+                                TextButton(
+                                    onClick = {
+                                        confirmRestore = false
+                                        working = true
+                                        status = "Restoring…"
+                                        scope.launch {
+                                            status = when (val r = backup.restore(version.at)) {
+                                                is AiCallResult.Success ->
+                                                    if (r.value == 0) "Already up to date"
+                                                    else "Restored ${r.value} day(s)"
+                                                is AiCallResult.Failure -> r.message
+                                            }
+                                            refresh()
+                                            working = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text(
+                                            stamp.format(Date(version.at)),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            "${version.days} days · ${version.entries} entries",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        working = false
                     }
-                }) { Text("Restore") }
+                }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { confirmRestore = false }) { Text("Cancel") }
             }

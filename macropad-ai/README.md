@@ -163,42 +163,27 @@ Play-installed copy has no server configured, so it never sees the update UI.
 
 ## Backups
 
-Each user backs up to their own slot on this daemon, written to a staging file and
-renamed so a connection dropping mid-upload cannot leave a half-written backup where a
-good one was.
+Each user's backups live in `data/backups/<user>/<timestamp>.json`, and **nothing is
+ever overwritten**. Restoring is "pick a time", so the failure that actually happens —
+noticing on Thursday that something was deleted on Monday — is recoverable. Any scheme
+that overwrites the current copy loses that race the moment backups become frequent.
 
 Backups run on their own once a server is connected: a few minutes after you log
-something, and once a day regardless. The toggle is in **Settings → Server Backup**.
+something, and once a day regardless. The toggle is in **Settings → Server Backup**, and
+**Restore** lists every stored backup with its date and size so you can pick one. That
+list is in the app on purpose — the person who needs an old copy has a phone, not a
+shell on this machine.
 
-Three numbered rotations are kept, plus a **daily, weekly and monthly** copy. The
-numbered ones alone were several days of history when backups were taken by hand; now
-that they arrive minutes after a change, three of them can span an hour — and the
-mistake worth recovering from is usually a deletion noticed days later, not a lost
-phone. Each generation is only replaced once the copy in it is older than its own
-window, so they hold their distance however often backups arrive.
+Old backups are thinned by age: everything from the last 48 hours, then one a day for a
+month, then one a week for a year. The newest is never removed. A year of hourly
+backups prunes to about 125 files, a few megabytes at this payload size.
 
 ```bash
-docker compose exec macropad-ai python -m app.cli backups
-docker compose exec macropad-ai python -m app.cli restore-backup kevin weekly
+docker compose exec macropad-ai python -m app.cli backups   # list them
 ```
 
-`restore-backup` makes an older copy the current one — the phone then pulls it with
-**Restore**. It rotates the copy it replaces, so promoting the wrong one is undoable.
-
-This exists because Dropbox is not shareable. A Dropbox app registration in Development
-status admits exactly one linked account, so the second person in a household hits
-"this app has reached its user limit" and has no backup at all.
-
-A phone with an existing Dropbox backup shows **Migrate from Dropbox**. It reads the
-Dropbox file, shows what it holds that the phone does not, merges only the gaps, and
-then uploads the combined result here. Nothing local is overwritten, nothing is removed
-from Dropbox, and running it twice does nothing the second time — so a failed migration
-is safe to retry.
-
-Backup payloads are version 4: daily totals, presets, targets, widget settings, preset
-display settings, and the per-entry history behind the History timeline. Version 3 files
-(anything written before this) restore fine; they simply have no per-entry history to
-give back.
+Backups from before this layout are moved into the series on first access, keeping
+their modification time as their position.
 
 ## Web log
 

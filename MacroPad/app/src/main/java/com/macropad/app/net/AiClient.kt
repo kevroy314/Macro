@@ -80,6 +80,20 @@ data class ServerBackupMeta(
     val rotations: Int = 0
 )
 
+/** One backup in the series, any of which can be restored. */
+data class ServerBackupVersion(
+    val at: Long = 0,
+    @SerializedName("size_bytes") val sizeBytes: Long = 0,
+    val days: Int = 0,
+    val presets: Int = 0,
+    val entries: Int = 0,
+    val unreadable: Boolean = false
+)
+
+data class ServerBackupHistory(
+    val backups: List<ServerBackupVersion> = emptyList()
+)
+
 /** A person with their own key on the shared daemon. */
 data class ServerUser(
     val id: String = "",
@@ -422,8 +436,19 @@ object AiClient {
     }
 
     /** Returns the stored backup as raw JSON, for the caller to parse into BackupData. */
-    suspend fun downloadBackup(settings: AiSettings): AiCallResult<String> =
-        when (val raw = executeRaw(request(settings, "/api/v1/backup").get().build())) {
+    suspend fun backupHistory(settings: AiSettings): AiCallResult<ServerBackupHistory> =
+        execute(
+            request(settings, "/api/v1/backup/history").get().build(),
+            ServerBackupHistory::class.java
+        )
+
+    /** [at] picks one backup out of the series; null takes the newest. */
+    suspend fun downloadBackup(
+        settings: AiSettings,
+        at: Long? = null
+    ): AiCallResult<String> {
+        val path = if (at == null) "/api/v1/backup" else "/api/v1/backup?at=$at"
+        return when (val raw = executeRaw(request(settings, path).get().build())) {
             is AiCallResult.Failure -> raw
             is AiCallResult.Success -> try {
                 val obj = gson.fromJson(raw.value, JsonObject::class.java)
@@ -437,6 +462,7 @@ object AiClient {
                 AiCallResult.Failure("Could not read the backup: ${e.message}")
             }
         }
+    }
 
     suspend fun whoami(settings: AiSettings): AiCallResult<ServerUser> =
         execute(request(settings, "/api/v1/whoami").get().build(), ServerUser::class.java)

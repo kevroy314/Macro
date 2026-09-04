@@ -538,9 +538,22 @@ async def backup_meta(user: users.User = Depends(auth.current_user)) -> dict[str
     return backups.meta(user.id)
 
 
+@app.get(f"{API}/backup/history")
+async def backup_history(user: users.User = Depends(auth.current_user)) -> dict[str, Any]:
+    """Every backup this user can restore from, newest first.
+
+    Over the API rather than only in the CLI: the person who needs an older copy is
+    the one who deleted something last week, and they have a phone, not a shell.
+    """
+    return {"backups": backups.history(user.id)}
+
+
 @app.get(f"{API}/backup")
-async def get_backup(user: users.User = Depends(auth.current_user)) -> dict[str, Any]:
-    payload = backups.load(user.id)
+async def get_backup(
+    at: int | None = None,
+    user: users.User = Depends(auth.current_user),
+) -> dict[str, Any]:
+    payload = backups.load(user.id, at)
     if payload is None:
         raise HTTPException(status_code=404, detail="No backup stored yet")
     return {"backup": payload, "meta": backups.meta(user.id)}
