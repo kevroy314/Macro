@@ -212,6 +212,30 @@ alone does not re-run `provideGlance()`, and the widget silently keeps showing s
 numbers — which took a long time to work out the first time. See `MacroStatusWidget.kt`,
 `IncrementWidget.kt`, `PresetWidget.kt`.
 
+### Test the path that succeeds, not just the ones that refuse
+
+The `Revise` endpoint shipped crashing on every real use. Its guards had been
+verified — 400 on an empty correction, 404 across users — and the success path had
+never once been run, so an unbound variable sat in plain sight. Rejections are the
+easy half; a feature is not tested until it has done the thing it exists to do.
+
+Related: never run a state-changing command against live data as a "check". A loop
+verifying that every documented CLI command works generated a TLS certificate in the
+running server's data directory, which flipped it to HTTPS on the next restart and
+broke the reverse proxy in front of it.
+
+### System state read outside Compose is a stale read
+
+A permission, or anything else granted in another activity, changes nothing Compose
+observes, so the UI keeps showing the old answer. Read it on `ON_RESUME` into
+`mutableStateOf`. This has now been the cause twice — the install button (#4) and the
+update badge — so treat it as the default approach rather than a fix applied after a
+report.
+
+`LaunchedEffect(Unit)` has the same shape of problem for anything that should be
+re-checked when someone comes back: it runs once per composition, and a warm start
+does not re-compose.
+
 ### Two small ones that cost real debugging time
 
 - `MaterialTheme.colorScheme.outline` is this app's **secondary text colour**

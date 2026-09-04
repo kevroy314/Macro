@@ -130,12 +130,34 @@ except `/api/v1/health`.
 |---|---|---|
 | `POST` | `/api/v1/jobs` | multipart: `text`, `images`, `threshold_mode`, `threshold_value`, `client_job_id` |
 | `GET` | `/api/v1/jobs?updated_since=&limit=` | incremental poll |
-| `GET` | `/api/v1/jobs/{id}` | full detail, events, answers |
+| `GET` | `/api/v1/jobs/{id}` | full detail, events, answers, steps |
 | `POST` | `/api/v1/jobs/{id}/answers` | `{"answers":[{"question_id","answer"}]}` — resumes the same session |
+| `POST` | `/api/v1/jobs/{id}/correct` | `{"text"}` — tell it what it got wrong; resumes and revises in place |
 | `POST` | `/api/v1/jobs/{id}/cancel` | interrupt and tear down |
 | `POST` | `/api/v1/jobs/{id}/retry` | re-run with corrected inputs as a linked new job |
 | `DELETE` | `/api/v1/jobs/{id}` | forget it entirely |
+| `POST` | `/api/v1/threads` | multipart: `text`, `images`, `context`, `client_thread_id` — start a planning thread |
+| `GET` | `/api/v1/threads?updated_since=&limit=` | incremental poll |
+| `GET` | `/api/v1/threads/{id}` | full detail, messages, per-reply steps |
+| `POST` | `/api/v1/threads/{id}/messages` | multipart: another turn on the same thread |
+| `POST` | `/api/v1/threads/{id}/cancel` | interrupt the turn in flight |
+| `DELETE` | `/api/v1/threads/{id}` | forget the thread |
+| `GET` | `/api/v1/backup/meta` | when the newest backup was taken, and how many are kept |
+| `GET` | `/api/v1/backup/history` | every restorable backup, newest first |
+| `GET` | `/api/v1/backup?at=` | the newest backup, or the one taken at that timestamp |
+| `PUT` | `/api/v1/backup` | `{"backup": {...}}` — store one |
+| `GET` | `/api/v1/release/latest` | the newest published build, with its notes |
+| `GET` | `/api/v1/release/download/{file}` | the APK; accepts `?key=` as well as the header |
+| `GET` | `/api/v1/users` | who has a key |
+| `POST` | `/api/v1/users` | invite someone (primary user only); re-inviting an email re-shares their code |
+| `GET` | `/api/v1/whoami` | which user this key belongs to |
+| `POST` | `/api/v1/preset-tags` | background search-tagging for presets |
+| `GET` | `/api/v1/health` | unauthenticated liveness |
 | `GET` | `/` | web job log (see below) |
+
+Jobs and threads both carry `progress`, the step in flight, and `steps`, everything
+they have done. A planning thread's steps move onto the reply that produced them once
+the turn finishes, so a conversation shows the work per answer.
 
 `client_job_id` makes submission idempotent: a retried upload over a flaky mobile
 connection returns the existing job rather than logging the meal twice.
