@@ -227,7 +227,7 @@ data/apikey               the API key
 data/env                  your configuration
 data/jobs/<id>/           the uploaded photos and the session transcript
 data/tls/                 the self-signed certificate, if there is one
-data/backups/             one backup per user, three rotations deep
+data/backups/<user>/      one file per backup, named by timestamp
 data/users.json           who holds a key
 ```
 

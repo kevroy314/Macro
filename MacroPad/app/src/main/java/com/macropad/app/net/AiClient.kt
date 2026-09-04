@@ -77,7 +77,9 @@ data class ServerBackupMeta(
     @SerializedName("device_id") val deviceId: String = "",
     val days: Int = 0,
     val presets: Int = 0,
-    val rotations: Int = 0
+    /** How many backups the server is holding, and how far back they go. */
+    val count: Int = 0,
+    @SerializedName("oldest_at") val oldestAt: Long = 0
 )
 
 /** One backup in the series, any of which can be restored. */

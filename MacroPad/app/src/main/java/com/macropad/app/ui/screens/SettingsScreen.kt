@@ -1163,7 +1163,11 @@ fun ServerBackupCard(
                     meta?.exists == true -> {
                         val when1 = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
                             .format(Date(meta!!.updatedAt))
-                        "Last backup $when1 · ${meta!!.days} days, ${meta!!.presets} presets"
+                        buildString {
+                            append("Last backup $when1 · ${meta!!.days} days, ")
+                            append("${meta!!.presets} presets")
+                            if (meta!!.count > 1) append(" · ${meta!!.count} kept")
+                        }
                     }
                     else -> "Nothing backed up yet."
                 },
