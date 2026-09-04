@@ -236,8 +236,16 @@ whether the credentials are mounted — in the order they break. Note that inbou
 traffic working proves nothing here: a reverse proxy serving pages, or an SSH session
 into this machine, never asks it to resolve an outbound name. Only the agent does.
 
-A failing AAAA lookup with a working A lookup is the shape that produces `ENOTIMP`,
-because the CLI's resolver asks for both and reports the refusal.
+When DNS fails, `doctor` also checks whether anything gets out at all. DNS down with
+TCP/443 still working means something on the host — usually a VPN — is dropping port 53
+from the container's network while leaving other traffic alone. Confirmed on this setup:
+with the VPN up, the container could not reach 1.1.1.1, 8.8.8.8 or the Windows resolver
+on port 53, over UDP or TCP, while a TLS connection to Anthropic by IP succeeded and
+WSL's own resolution kept working.
+
+Pinning resolvers does not help that, because the problem is not which resolver but
+that port 53 never leaves the bridge. The fix is to split-tunnel the Docker bridge
+subnet (`docker network inspect macropad-ai_default` prints it) or to drop the VPN.
 
 A failed job keeps its photos and can be re-run from the app.
 

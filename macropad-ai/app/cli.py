@@ -106,6 +106,23 @@ def _doctor() -> int:
             ok = False
             print(f"  {url:32s} FAIL: {type(exc).__name__}: {exc}")
 
+    if not ok:
+        # DNS down while TCP/443 still works is a firewall or VPN on the host eating
+        # port 53 out of the container's network. It looks like an outage and is not
+        # one, and nothing else on the machine notices — a reverse proxy and an SSH
+        # session never ask this container to resolve anything.
+        print("\negress (does anything get out at all?)")
+        try:
+            probe = socket.create_connection(("1.1.1.1", 443), timeout=6)
+            probe.close()
+            print("  TCP 443 out: works")
+            print("\n  DNS is blocked but egress is not. Something on the host —")
+            print("  usually a VPN — is dropping port 53 from this container's")
+            print("  network while leaving other traffic alone. Split-tunnel the")
+            print("  Docker bridge subnet, or disconnect the VPN.")
+        except Exception:
+            print("  TCP 443 out: fails too — this is a network outage, not DNS")
+
     print("\ncredentials")
     creds = pathlib.Path(os.environ.get("HOME", "/home/app")) / ".claude" / ".credentials.json"
     print(f"  {'present' if creds.is_file() else 'MISSING'}  {creds}")
