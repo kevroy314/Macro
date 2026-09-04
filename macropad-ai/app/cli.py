@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import pathlib
 import sys
 
 from . import backups, config, db, releases, tls, users
@@ -51,6 +53,68 @@ def print_setup_qr(user: "users.User") -> None:
     else:
         print(f"  pinned  no (using ordinary certificate validation)")
     print("\nScan it from the app: Settings -> Scan a setup code.\n")
+
+
+def _doctor() -> int:
+    """Check the things that actually break, in the order they break.
+
+    Written for the case where an estimate fails and it is not obvious whether the
+    problem is this machine, the network, or Anthropic. Inbound traffic working —
+    a reverse proxy, an SSH session — says nothing about whether the container can
+    resolve a name outbound, which is a different path entirely.
+    """
+    import socket
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    ok = True
+
+    print("resolver")
+    try:
+        with open("/etc/resolv.conf") as handle:
+            for line in handle:
+                if line.startswith("nameserver"):
+                    print(f"  {line.strip()}")
+    except OSError as exc:
+        print(f"  could not read /etc/resolv.conf: {exc}")
+
+    print("\nDNS")
+    for host in ("api.anthropic.com", "console.anthropic.com"):
+        for family, label in ((socket.AF_INET, "A"), (socket.AF_INET6, "AAAA")):
+            try:
+                info = socket.getaddrinfo(host, 443, family)
+                print(f"  {label:4s} {host:24s} {info[0][4][0]}")
+            except socket.gaierror as exc:
+                # AAAA failing alone is the shape that produces ENOTIMP in the agent,
+                # because the CLI's resolver asks for both and reports the refusal.
+                severity = "FAIL" if family == socket.AF_INET else "warn"
+                if family == socket.AF_INET:
+                    ok = False
+                print(f"  {label:4s} {host:24s} {severity}: {exc}")
+
+    print("\nreachability")
+    context = ssl.create_default_context()
+    for url in ("https://api.anthropic.com/", "https://claude.ai/"):
+        try:
+            urllib.request.urlopen(url, timeout=8, context=context)
+            print(f"  {url:32s} answered")
+        except urllib.error.HTTPError as exc:
+            # A 4xx is the server replying, which is all we are testing for.
+            print(f"  {url:32s} answered ({exc.code})")
+        except Exception as exc:
+            ok = False
+            print(f"  {url:32s} FAIL: {type(exc).__name__}: {exc}")
+
+    print("\ncredentials")
+    creds = pathlib.Path(os.environ.get("HOME", "/home/app")) / ".claude" / ".credentials.json"
+    print(f"  {'present' if creds.is_file() else 'MISSING'}  {creds}")
+    if not creds.is_file():
+        ok = False
+
+    print("\n" + ("Everything the agent needs is working." if ok else
+                   "Something above is broken — that is where to look."))
+    return 0 if ok else 1
 
 
 def main(argv: list[str]) -> int:
@@ -147,6 +211,8 @@ def main(argv: list[str]) -> int:
                 when = datetime.datetime.fromtimestamp(entry["at"] / 1000)
                 print(f"  {when:%Y-%m-%d %H:%M}  {entry['days']:4d} days  "
                       f"{entry['entries']:5d} entries  {entry['size_bytes'] // 1024:4d} KB")
+    elif command == "doctor":
+        return _doctor()
     elif command == "stats":
         db.connect()
         jobs = [j for u in users.all_users() for j in db.list_jobs(u.id, limit=10000)]
@@ -165,7 +231,7 @@ def main(argv: list[str]) -> int:
         print(
             "usage: python -m app.cli {show-key|rotate-key|sweep-images|stats"
             "|add-user|list-users|rotate-user-key|remove-user"
-            "|setup-qr|release-qr|cert|backups}",
+            "|setup-qr|release-qr|cert|backups|doctor}",
             file=sys.stderr,
         )
         return 1

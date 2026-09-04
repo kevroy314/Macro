@@ -227,11 +227,17 @@ on the host, rewrote WSL's resolver, and took the container's DNS with it. The
 container's upstream resolvers are pinned in `docker-compose.yml` for that reason; the
 agent only resolves public names, so nothing here needs the LAN's resolver.
 
-To tell a genuine outage from a DNS problem:
-
 ```bash
-docker compose exec macropad-ai python -c "import socket;print(socket.gethostbyname('api.anthropic.com'))"
+docker compose exec macropad-ai python -m app.cli doctor
 ```
+
+`doctor` checks the resolver, both A and AAAA lookups, whether Anthropic answers, and
+whether the credentials are mounted — in the order they break. Note that inbound
+traffic working proves nothing here: a reverse proxy serving pages, or an SSH session
+into this machine, never asks it to resolve an outbound name. Only the agent does.
+
+A failing AAAA lookup with a working A lookup is the shape that produces `ENOTIMP`,
+because the CLI's resolver asks for both and reports the refusal.
 
 A failed job keeps its photos and can be re-run from the app.
 
