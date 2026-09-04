@@ -108,6 +108,22 @@ Only include a new follow-up question if one is still worth asking under the sam
 threshold; usually there is none, and an empty list is the right answer."""
 
 
+def build_correction_prompt(correction: str) -> str:
+    return f"""\
+The user is correcting your estimate. They were there and you were not, so take what \
+they say as fact rather than something to weigh against the photo:
+
+{correction}
+
+Common cases: you misread the portion, you identified the wrong item, or you answered \
+a different question than the one they meant. Re-read the images if that helps, and \
+look up anything the correction now makes findable.
+
+Return the complete JSON result again, not just the parts that changed. Do not ask a \
+follow-up question unless the correction itself is ambiguous — they have already told \
+you what was wrong, and asking again is the thing they were trying to avoid."""
+
+
 # ---------------------------------------------------------------- planning threads
 
 PLANNING_SYSTEM_PROMPT = """\

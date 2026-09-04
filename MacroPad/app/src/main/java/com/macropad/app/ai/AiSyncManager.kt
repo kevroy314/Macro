@@ -248,6 +248,7 @@ class AiSyncManager(
             serverJobId = server.id,
             parentJobId = server.parentJobId ?: local.parentJobId,
             status = server.status,
+            progress = server.progress,
             revision = server.revision,
             error = server.error,
             resultJson = resultJson ?: local.resultJson,
@@ -405,6 +406,37 @@ class AiSyncManager(
 
     // -------------------------------------------------------------- job management
 
+    /**
+     * Correct a finished estimate in place.
+     *
+     * Re-running throws away the conversation and pays for the research again. A
+     * correction resumes the same session, so "I actually had one more of these"
+     * costs a single turn and lands as a delta on what was already logged.
+     */
+    suspend fun correctJob(clientJobId: String, text: String): AiCallResult<AiJob> {
+        val job = repository.getAiJob(clientJobId)
+            ?: return AiCallResult.Failure("That estimate is gone")
+        val settings = repository.getAiSettings()
+        val serverJobId = job.serverJobId
+        if (!settings.isConfigured || serverJobId == null) {
+            return AiCallResult.Failure("This estimate can't be revised")
+        }
+
+        repository.saveAiJob(job.copy(status = AiJob.STATUS_RUNNING, error = null))
+        AiJobSyncService.start(context)
+
+        return when (val response = AiClient.correct(settings, serverJobId, text.trim())) {
+            is AiCallResult.Success -> {
+                val merged = mutex.withLock { mergeServerJob(response.value, job) }
+                AiCallResult.Success(merged ?: job)
+            }
+            is AiCallResult.Failure -> {
+                repository.saveAiJob(job.copy(status = AiJob.STATUS_COMPLETED, error = response.message))
+                response
+            }
+        }
+    }
+
     suspend fun cancelJob(clientJobId: String) {
         val job = repository.getAiJob(clientJobId) ?: return
         val settings = repository.getAiSettings()
@@ -477,9 +509,21 @@ class AiSyncManager(
         return when (response) {
             is AiCallResult.Success -> {
                 mutex.withLock { mergeServerJob(response.value, newJob) }
+                // Take the old estimate back out of the day before the new one lands.
+                // Without this a re-run counts the same meal twice — the superseded
+                // job keeps its entry and its contribution to the daily total, and
+                // the replacement adds its own on top.
+                repository.setAiJobExcluded(job, true)
                 repository.saveAiJob(
-                    job.copy(status = AiJob.STATUS_SUPERSEDED, questionsResolved = true)
+                    repository.getAiJob(clientJobId)?.copy(
+                        status = AiJob.STATUS_SUPERSEDED,
+                        questionsResolved = true
+                    ) ?: job.copy(
+                        status = AiJob.STATUS_SUPERSEDED,
+                        questionsResolved = true
+                    )
                 )
+                onDataChanged?.invoke()
                 AiNotifications.cancelAllForJob(context, clientJobId, repository.parseAiResult(job))
                 AiCallResult.Success(repository.getAiJob(newClientId) ?: newJob)
             }

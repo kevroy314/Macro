@@ -48,12 +48,14 @@ fun AiJobsScreen(
     onCancel: suspend (clientJobId: String) -> Unit,
     onRetry: suspend (clientJobId: String, text: String) -> Unit,
     onDelete: suspend (clientJobId: String) -> Unit,
+    onCorrect: suspend (clientJobId: String, text: String) -> Unit,
     onSetExcluded: suspend (clientJobId: String, excluded: Boolean) -> Unit
 ) {
     val jobs by jobsFlow.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var editingJob by remember { mutableStateOf<AiJob?>(null) }
     var confirmDelete by remember { mutableStateOf<AiJob?>(null) }
+    var correcting by remember { mutableStateOf<AiJob?>(null) }
     var refreshing by remember { mutableStateOf(false) }
 
     suspend fun refresh() {
@@ -143,6 +145,7 @@ fun AiJobsScreen(
                         onCancel = { scope.launch { onCancel(job.clientJobId) } },
                         onEdit = { editingJob = job },
                         onDelete = { confirmDelete = job },
+                        onCorrect = { correcting = job },
                         onToggleExcluded = {
                             scope.launch {
                                 onSetExcluded(job.clientJobId, !job.excludedFromTotals)
@@ -161,6 +164,47 @@ fun AiJobsScreen(
             onConfirm = { newText ->
                 scope.launch { onRetry(job.clientJobId, newText) }
                 editingJob = null
+            }
+        )
+    }
+
+    correcting?.let { job ->
+        var correction by remember(job.clientJobId) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { correcting = null },
+            title = { Text("What did it get wrong?") },
+            text = {
+                Column {
+                    Text(
+                        "It keeps everything else it worked out and just fixes this. " +
+                            "Your totals update to match.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = correction,
+                        onValueChange = { correction = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        placeholder = {
+                            Text("e.g. I had one more of the same, so twice that amount")
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val text = correction
+                        correcting = null
+                        scope.launch { onCorrect(job.clientJobId, text) }
+                    },
+                    enabled = correction.isNotBlank()
+                ) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { correcting = null }) { Text("Cancel") }
             }
         )
     }
@@ -205,6 +249,7 @@ private fun AiJobCard(
     onCancel: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onCorrect: () -> Unit,
     onToggleExcluded: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -237,6 +282,34 @@ private fun AiJobCard(
                     )
                 }
                 StatusChip(job)
+            }
+
+            if (job.excludedFromTotals) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "Not counted in your totals",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            // What it is doing right now, straight from the agent's stream. Without
+            // this a running estimate shows nothing for a couple of minutes, which
+            // is indistinguishable from being stuck.
+            job.progress.takeIf { it.isNotBlank() && job.isActive }?.let { line ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp).padding(top = 2.dp),
+                        strokeWidth = 1.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
 
             if (imagePaths.isNotEmpty()) {
@@ -421,24 +494,23 @@ private fun AiJobCard(
                     TextButton(onClick = onCancel) { Text("Cancel") }
                 }
                 if (!job.isActive) {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit and re-run")
+                    // Correcting is the common need — it got the portion or the item
+                    // wrong — and it costs one turn instead of researching again.
+                    if (job.serverJobId != null) {
+                        TextButton(onClick = onCorrect) { Text("Correct") }
                     }
                     if (job.appliedEntryId != null) {
-                        IconButton(onClick = onToggleExcluded) {
-                            Icon(
-                                if (job.excludedFromTotals) {
-                                    Icons.Default.Visibility
-                                } else {
-                                    Icons.Default.VisibilityOff
-                                },
-                                contentDescription = if (job.excludedFromTotals) {
-                                    "Count in totals"
-                                } else {
-                                    "Exclude from totals"
-                                }
+                        // Named, not an eye icon. Nobody guesses what the eye means,
+                        // and this is the control people reach for to undo a mistake.
+                        TextButton(onClick = onToggleExcluded) {
+                            Text(
+                                if (job.excludedFromTotals) "Count it" else "Don't count",
+                                color = MaterialTheme.colorScheme.outline
                             )
                         }
+                    }
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit and re-run")
                     }
                     IconButton(onClick = onDelete) {
                         Icon(

@@ -34,6 +34,7 @@ data class ServerJob(
     @SerializedName("client_job_id") val clientJobId: String?,
     @SerializedName("parent_job_id") val parentJobId: String?,
     val status: String,
+    val progress: String = "",
     @SerializedName("prompt_text") val promptText: String = "",
     @SerializedName("threshold_mode") val thresholdMode: String = "percent",
     @SerializedName("threshold_value") val thresholdValue: Float = 10f,
@@ -321,6 +322,21 @@ object AiClient {
         return execute(
             request(settings, "/api/v1/jobs/$serverJobId/answers")
                 .post(payload.toString().toRequestBody(jsonMediaType))
+                .build(),
+            ServerJob::class.java
+        )
+    }
+
+    /** Tell a finished estimate what it got wrong. Resumes its session. */
+    suspend fun correct(
+        settings: AiSettings,
+        serverJobId: String,
+        text: String
+    ): AiCallResult<ServerJob> {
+        val body = JsonObject().apply { addProperty("text", text) }
+        return execute(
+            request(settings, "/api/v1/jobs/$serverJobId/correct")
+                .post(gson.toJson(body).toRequestBody(jsonMediaType))
                 .build(),
             ServerJob::class.java
         )

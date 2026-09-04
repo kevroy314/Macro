@@ -123,6 +123,9 @@ def _build_options(directory: Path, resume_session: str | None) -> ClaudeAgentOp
         setting_sources=[],
         max_turns=config.MAX_TURNS,
         output_format=schema.OUTPUT_FORMAT,
+        # Estimating a meal takes as long as planning does and was showing nothing at
+        # all while it worked, which reads as the app being broken.
+        include_partial_messages=True,
         resume=resume_session,
         env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     )
@@ -137,10 +140,15 @@ class JobRunner:
 
     # ------------------------------------------------------------------ public
 
-    def submit(self, job_id: str, followup: list[tuple[str, str]] | None = None) -> None:
+    def submit(
+        self,
+        job_id: str,
+        followup: list[tuple[str, str]] | None = None,
+        correction: str | None = None,
+    ) -> None:
         if job_id in self._tasks and not self._tasks[job_id].done():
             return
-        task = asyncio.create_task(self._guarded_run(job_id, followup))
+        task = asyncio.create_task(self._guarded_run(job_id, followup, correction))
         self._tasks[job_id] = task
         task.add_done_callback(lambda _t, jid=job_id: self._tasks.pop(jid, None))
 
@@ -177,13 +185,16 @@ class JobRunner:
     # ----------------------------------------------------------------- internal
 
     async def _guarded_run(
-        self, job_id: str, followup: list[tuple[str, str]] | None
+        self,
+        job_id: str,
+        followup: list[tuple[str, str]] | None,
+        correction: str | None = None,
     ) -> None:
         try:
             async with self._semaphore:
                 if job_id in self._cancelling:
                     raise asyncio.CancelledError
-                await self._run(job_id, followup)
+                await self._run(job_id, followup, correction)
         except asyncio.CancelledError:
             db.set_status(job_id, db.STATUS_CANCELLED, "cancelled by user")
             log.info("job %s cancelled", job_id)
@@ -196,7 +207,12 @@ class JobRunner:
             self._cancelling.discard(job_id)
             self._clients.pop(job_id, None)
 
-    async def _run(self, job_id: str, followup: list[tuple[str, str]] | None) -> None:
+    async def _run(
+        self,
+        job_id: str,
+        followup: list[tuple[str, str]] | None,
+        correction: str | None = None,
+    ) -> None:
         job = db.get_job(job_id)
         if job is None:
             return
@@ -205,7 +221,10 @@ class JobRunner:
         directory.mkdir(parents=True, exist_ok=True)
         transcript = directory / "transcript.jsonl"
 
-        if followup:
+        if correction:
+            prompt = prompts.build_correction_prompt(correction)
+            db.add_event(job_id, "correction_submitted", correction[:200])
+        elif followup:
             prompt = prompts.build_followup_prompt(followup)
             resume_session = job["session_id"]
             db.add_event(job_id, "followup_submitted", json.dumps([q for q, _ in followup]))
@@ -229,12 +248,20 @@ class JobRunner:
         final_text = ""
         auth_error: str | None = None
 
+        live = LiveProgress()
+
         async with ClaudeSDKClient(options=options) as client:
             self._clients[job_id] = client
             await client.query(prompt)
 
             async for message in client.receive_response():
                 _append_transcript(transcript, message)
+
+                if isinstance(message, StreamEvent):
+                    live.observe(message.event or {})
+                    if live.should_write(db.now_ms()):
+                        db.update_job(job_id, progress=live.line())
+                    continue
 
                 if isinstance(message, SystemMessage):
                     if message.subtype == "init":
@@ -254,6 +281,7 @@ class JobRunner:
                 elif isinstance(message, ResultMessage):
                     db.update_job(
                         job_id,
+                        progress="",
                         session_id=message.session_id,
                         cost_usd=message.total_cost_usd,
                         num_turns=message.num_turns,
@@ -279,7 +307,7 @@ class JobRunner:
             result, job["threshold_mode"], job["threshold_value"]
         )
 
-        revision = (job["revision"] or 0) + (1 if followup else 0)
+        revision = (job["revision"] or 0) + (1 if (followup or correction) else 0)
         db.update_job(job_id, result_json=json.dumps(result), revision=revision, error=None)
 
         if result["follow_up_questions"]:

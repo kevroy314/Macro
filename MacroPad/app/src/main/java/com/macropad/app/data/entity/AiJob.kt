@@ -51,7 +51,9 @@ data class AiJob(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     /** Server-side updated_at of the last payload we merged, for incremental polling. */
-    val serverUpdatedAt: Long = 0
+    val serverUpdatedAt: Long = 0,
+    /** What the estimate is doing right now, while it runs. Empty otherwise. */
+    val progress: String = ""
 ) {
     val isActive: Boolean
         get() = status in ACTIVE_STATUSES

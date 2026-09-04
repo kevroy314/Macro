@@ -434,6 +434,10 @@ fun MainScreen(
                     onSetExcluded = { clientJobId, excluded ->
                         aiSyncManager.setExcludedFromTotals(clientJobId, excluded)
                         updateWidgets()
+                    },
+                    onCorrect = { clientJobId, text ->
+                        aiSyncManager.correctJob(clientJobId, text)
+                        updateWidgets()
                     }
                 )
                 }

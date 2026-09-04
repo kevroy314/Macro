@@ -73,13 +73,19 @@ object AiNotifications {
             activeCount == 1 -> "Estimating macros…"
             else -> "Estimating macros ($activeCount jobs)"
         }
-        val text = singleJob?.promptText?.takeIf { it.isNotBlank() }
+        // Prefer what it is actually doing right now. A notification that says
+        // "Researching what you logged" for two minutes looks identical to a hang,
+        // which is how it gets reported.
+        val text = singleJob?.progress?.takeIf { it.isNotBlank() }
+            ?: singleJob?.promptText?.takeIf { it.isNotBlank() }
             ?: "Researching what you logged"
 
         val builder = NotificationCompat.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
+            // Progress lines and the reply itself run past one line.
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppIntent(context, MainActivity.ROUTE_AI_LOG))

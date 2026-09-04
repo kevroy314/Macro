@@ -91,10 +91,13 @@ def connect() -> sqlite3.Connection:
 
 
 def _add_progress_column(conn: sqlite3.Connection) -> None:
-    """A line describing what a planning turn is doing right now."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
-    if "progress" not in columns:
-        conn.execute("ALTER TABLE threads ADD COLUMN progress TEXT NOT NULL DEFAULT ''")
+    """A line describing what a run is doing right now, for jobs and threads alike."""
+    for table in ("threads", "jobs"):
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "progress" not in columns:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN progress TEXT NOT NULL DEFAULT ''"
+            )
 
 
 def _add_owner_columns(conn: sqlite3.Connection) -> None:
@@ -223,6 +226,10 @@ def update_job(job_id: str, **fields: Any) -> None:
 
 def set_status(job_id: str, status: str, detail: str | None = None) -> None:
     fields: dict[str, Any] = {"status": status}
+    if status != STATUS_RUNNING:
+        # Clear the live breadcrumb here rather than at each call site, so no exit
+        # path can leave a job showing what it was doing when it stopped.
+        fields["progress"] = ""
     if status in (STATUS_COMPLETED, STATUS_FAILED, STATUS_CANCELLED, STATUS_SUPERSEDED):
         fields["finished_at"] = now_ms()
     update_job(job_id, **fields)
@@ -285,6 +292,8 @@ def job_to_api(job: dict[str, Any], include_events: bool = False) -> dict[str, A
         "client_job_id": job["client_job_id"],
         "parent_job_id": job["parent_job_id"],
         "status": job["status"],
+        # What the run is doing right now. Empty unless it is working.
+        "progress": job["progress"] if "progress" in job.keys() else "",
         "prompt_text": job["prompt_text"],
         "threshold_mode": job["threshold_mode"],
         "threshold_value": job["threshold_value"],
@@ -378,6 +387,11 @@ def list_threads(owner: str, updated_since: int = 0, limit: int = 100) -> list[d
         "SELECT * FROM threads WHERE owner = ? AND updated_at > ? ORDER BY updated_at DESC LIMIT ?",
         (owner, updated_since, limit),
     )
+    return [dict(r) for r in rows]
+
+
+def list_active_threads() -> list[dict[str, Any]]:
+    rows = _query("SELECT * FROM threads WHERE status = ?", (THREAD_RUNNING,))
     return [dict(r) for r in rows]
 
 

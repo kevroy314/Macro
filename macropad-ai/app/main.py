@@ -65,6 +65,18 @@ async def lifespan(_app: FastAPI):
         db.add_event(job["id"], "requeued", "daemon restarted")
         runner.submit(job["id"])
 
+    # A planning turn cannot be resumed from a half-finished stream, and re-running
+    # it would spend money the user did not ask to spend twice. Release it instead,
+    # so the thread is usable again rather than showing a spinner forever.
+    for thread in db.list_active_threads():
+        log.info("releasing thread %s after restart", thread["id"])
+        db.update_thread(
+            thread["id"],
+            status=db.THREAD_IDLE,
+            progress="",
+            error="The server restarted while this was running. Send it again.",
+        )
+
     sweeper = asyncio.create_task(_retention_loop())
     try:
         yield
@@ -282,6 +294,32 @@ async def answer_job(
 
     db.add_answers(job_id, normalised)
     runner.submit(job_id, followup=pairs)
+    return db.job_to_api(_require_job(job_id, user.id))
+
+
+@app.post(f"{API}/jobs/{{job_id}}/correct")
+async def correct_job(
+    job_id: str,
+    payload: dict[str, Any],
+    user: users.User = Depends(auth.current_user),
+) -> dict[str, Any]:
+    """Tell a finished estimate what it got wrong, without starting over.
+
+    Re-running loses the conversation and pays for the research twice. This resumes
+    the same session, so "I actually had one more of the same" costs a single turn
+    and the revised numbers land as a delta on what was already logged.
+    """
+    job = _require_job(job_id, user.id)
+    if not job["session_id"]:
+        raise HTTPException(status_code=409, detail="This estimate cannot be revised")
+    if job["status"] in (db.STATUS_QUEUED, db.STATUS_RUNNING):
+        raise HTTPException(status_code=409, detail="It is still working — wait for it")
+
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Say what was wrong")
+
+    runner.submit(job_id, correction=text)
     return db.job_to_api(_require_job(job_id, user.id))
 
 

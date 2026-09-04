@@ -46,7 +46,7 @@ import com.macropad.app.data.entity.WidgetSettings
         AiThread::class,
         AiThreadMessage::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class MacroPadDatabase : RoomDatabase() {
@@ -278,6 +278,13 @@ abstract class MacroPadDatabase : RoomDatabase() {
             }
         }
 
+        /** Live progress for estimates, matching what planning threads already had. */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ai_jobs ADD COLUMN progress TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): MacroPadDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -287,7 +294,7 @@ abstract class MacroPadDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
                 )
                 // Deliberately NOT fallbackToDestructiveMigration(). This database is
                 // the only copy of months of the user's food log; a migration bug
