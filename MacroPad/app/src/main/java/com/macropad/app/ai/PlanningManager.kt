@@ -166,6 +166,7 @@ class PlanningManager(
                 serverThreadId = server.id,
                 title = server.title.ifBlank { local.title },
                 status = server.status,
+            progress = server.progress,
                 error = server.error,
                 serverUpdatedAt = maxOf(local.serverUpdatedAt, server.updatedAt)
             )

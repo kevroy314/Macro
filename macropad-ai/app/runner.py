@@ -363,6 +363,34 @@ def _build_planning_options(
     )
 
 
+def _describe_step(block: Any) -> str:
+    """Turn a tool call into something worth showing a waiting person.
+
+    A planning answer can take a couple of minutes of searching, and a spinner with
+    nothing behind it is indistinguishable from a hang — which is exactly how it gets
+    reported. These are written for the person waiting, not as tool names.
+    """
+    name = type(block).__name__
+    if name not in ("ToolUseBlock", "ServerToolUseBlock"):
+        return ""
+
+    tool = getattr(block, "name", "") or ""
+    payload = getattr(block, "input", None) or {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if tool == "WebSearch":
+        query = str(payload.get("query") or "").strip()
+        return f"Searching for {query}" if query else "Searching the web"
+    if tool == "WebFetch":
+        url = str(payload.get("url") or "")
+        host = urlparse(url).netloc.removeprefix("www.")
+        return f"Reading {host}" if host else "Reading a page"
+    if tool == "Read":
+        return "Looking at your photo"
+    return "Working"
+
+
 class ThreadRunner:
     """Runs one planning turn at a time per thread."""
 
@@ -406,13 +434,14 @@ class ThreadRunner:
         try:
             await self._run(thread_id, user_text, context_json)
         except asyncio.CancelledError:
-            db.update_thread(thread_id, status=db.THREAD_IDLE, error="Cancelled")
+            db.update_thread(thread_id, status=db.THREAD_IDLE, error="Cancelled", progress="")
             raise
         except Exception as exc:  # noqa: BLE001
             log.exception("planning turn failed for thread %s", thread_id)
             db.update_thread(
                 thread_id,
                 status=db.THREAD_FAILED,
+                progress="",
                 error=f"{type(exc).__name__}: {exc}",
             )
         finally:
@@ -461,6 +490,10 @@ class ThreadRunner:
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             final_text = block.text
+                        else:
+                            note = _describe_step(block)
+                            if note:
+                                db.update_thread(thread_id, progress=note)
                 elif isinstance(message, ResultMessage):
                     db.update_thread(thread_id, session_id=message.session_id)
                     cost += message.total_cost_usd or 0.0
@@ -474,6 +507,7 @@ class ThreadRunner:
         if raw_result is None:
             raise schema.ResultError("the assistant did not return a reply")
 
+        db.update_thread(thread_id, progress="")
         parsed = schema.normalise_planning(raw_result)
 
         db.add_message(

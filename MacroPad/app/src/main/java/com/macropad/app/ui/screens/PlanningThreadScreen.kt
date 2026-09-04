@@ -26,6 +26,7 @@ import coil.compose.AsyncImage
 import com.macropad.app.data.entity.AiProposal
 import com.macropad.app.data.entity.AiThread
 import com.macropad.app.data.entity.AiThreadMessage
+import com.macropad.app.ui.MarkdownText
 import com.macropad.app.ui.theme.CaloriesColor
 import com.macropad.app.ui.theme.CarbsColor
 import com.macropad.app.ui.theme.FatColor
@@ -148,7 +149,10 @@ fun PlanningThreadScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Working it out…",
+                            // Say what it is actually doing. A silent two-minute
+                            // spinner is indistinguishable from a hang.
+                            thread?.progress?.takeIf { it.isNotBlank() }
+                                ?: "Working it out…",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )
@@ -273,7 +277,16 @@ private fun MessageBubble(
                     Spacer(modifier = Modifier.height(4.dp))
                 }
                 if (message.text.isNotBlank()) {
-                    Text(message.text, style = MaterialTheme.typography.bodyMedium)
+                    if (message.role == "assistant") {
+                        // Replies cite sources as markdown links; a plain Text shows
+                        // the brackets.
+                        MarkdownText(
+                            text = message.text,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Text(message.text, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

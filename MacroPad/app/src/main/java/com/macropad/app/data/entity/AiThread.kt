@@ -20,7 +20,9 @@ data class AiThread(
     val error: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val serverUpdatedAt: Long = 0
+    val serverUpdatedAt: Long = 0,
+    /** What the assistant is doing right now, while [isBusy]. Empty when idle. */
+    val progress: String = ""
 ) {
     val isBusy: Boolean
         get() = status == STATUS_RUNNING || status == STATUS_SENDING

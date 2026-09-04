@@ -110,6 +110,7 @@ data class ServerThread(
     @SerializedName("client_thread_id") val clientThreadId: String?,
     val title: String = "",
     val status: String = "idle",
+    val progress: String = "",
     val error: String? = null,
     @SerializedName("cost_usd") val costUsd: Double? = null,
     @SerializedName("created_at") val createdAt: Long = 0,

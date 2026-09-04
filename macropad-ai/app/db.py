@@ -85,8 +85,16 @@ def connect() -> sqlite3.Connection:
             _conn.executescript(SCHEMA)
             _conn.executescript(THREAD_SCHEMA)
             _add_owner_columns(_conn)
+            _add_progress_column(_conn)
             _conn.commit()
         return _conn
+
+
+def _add_progress_column(conn: sqlite3.Connection) -> None:
+    """A line describing what a planning turn is doing right now."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
+    if "progress" not in columns:
+        conn.execute("ALTER TABLE threads ADD COLUMN progress TEXT NOT NULL DEFAULT ''")
 
 
 def _add_owner_columns(conn: sqlite3.Connection) -> None:
@@ -420,6 +428,8 @@ def thread_to_api(thread: dict[str, Any], include_messages: bool = False) -> dic
         "cost_usd": thread["cost_usd"],
         "created_at": thread["created_at"],
         "updated_at": thread["updated_at"],
+        # What the turn is doing right now. Empty when idle.
+        "progress": thread["progress"] if "progress" in thread.keys() else "",
     }
     if include_messages:
         out["messages"] = [
