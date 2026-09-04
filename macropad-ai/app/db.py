@@ -92,6 +92,14 @@ def connect() -> sqlite3.Connection:
 
 def _add_progress_column(conn: sqlite3.Connection) -> None:
     """A line describing what a run is doing right now, for jobs and threads alike."""
+    # Each reply carries the steps that produced it, so a long conversation shows
+    # the work per turn instead of one growing pile at the bottom.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(thread_messages)")}
+    if "steps" not in columns:
+        conn.execute(
+            "ALTER TABLE thread_messages ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'"
+        )
+
     for table in ("threads", "jobs"):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if "progress" not in columns:
@@ -430,11 +438,13 @@ def add_message(
     text: str,
     image_count: int = 0,
     proposals: str | None = None,
+    steps: str = "[]",
 ) -> None:
     _exec(
-        """INSERT INTO thread_messages (id, thread_id, role, text, image_count, proposals, created_at)
-           VALUES (?,?,?,?,?,?,?)""",
-        (message_id, thread_id, role, text, image_count, proposals, now_ms()),
+        """INSERT INTO thread_messages
+           (id, thread_id, role, text, image_count, proposals, steps, created_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (message_id, thread_id, role, text, image_count, proposals, steps, now_ms()),
     )
     update_thread(thread_id)
 
@@ -469,6 +479,7 @@ def thread_to_api(thread: dict[str, Any], include_messages: bool = False) -> dic
                 "text": m["text"],
                 "image_count": m["image_count"],
                 "proposals": json.loads(m["proposals"]) if m["proposals"] else [],
+                "steps": _steps_of(m),
                 "created_at": m["created_at"],
             }
             for m in get_messages(thread["id"])

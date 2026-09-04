@@ -292,6 +292,12 @@ private fun MessageBubble(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                 }
+                if (message.role == "assistant" && message.steps.length > 2) {
+                    // The work behind this particular reply. Collapsed, because by
+                    // now the answer is the point.
+                    AgentSteps(stepsJson = message.steps, running = false)
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
                 if (message.text.isNotBlank()) {
                     if (message.role == "assistant") {
                         // Replies cite sources as markdown links; a plain Text shows

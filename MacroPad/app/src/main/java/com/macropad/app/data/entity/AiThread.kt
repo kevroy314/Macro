@@ -61,6 +61,8 @@ data class AiThreadMessage(
     val proposalsJson: String = "[]",
     /** JSON array of proposal indices already added to the day. */
     val appliedIndicesJson: String = "[]",
+    /** The steps that produced this reply. JSON array of {at, text}. */
+    val steps: String = "[]",
     val createdAt: Long = System.currentTimeMillis()
 ) {
     companion object {

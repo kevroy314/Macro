@@ -223,6 +223,9 @@ class JobRunner:
 
         if correction:
             prompt = prompts.build_correction_prompt(correction)
+            # Resuming is the entire point: a correction is a word to the session
+            # that already did the research, not a fresh estimate.
+            resume_session = job["session_id"]
             db.add_event(job_id, "correction_submitted", correction[:200])
         elif followup:
             prompt = prompts.build_followup_prompt(followup)
@@ -594,7 +597,8 @@ class ThreadRunner:
             self._clients[thread_id] = client
             await client.query(prompt)
 
-            live = LiveProgress(previous=db._steps_of(thread))
+            # Fresh per turn: these belong to this reply, not the conversation.
+            live = LiveProgress()
 
             async for message in client.receive_response():
                 _append_transcript(directory / "transcript.jsonl", message)
@@ -636,7 +640,10 @@ class ThreadRunner:
         if raw_result is None:
             raise schema.ResultError("the assistant did not return a reply")
 
-        db.update_thread(thread_id, progress="", steps=live.steps_json())
+        # The steps move onto the reply; the thread's live copy is cleared so the
+        # in-progress block disappears rather than lingering under the answer.
+        turn_steps = live.steps_json()
+        db.update_thread(thread_id, progress="", steps="[]")
         parsed = schema.normalise_planning(raw_result)
 
         db.add_message(
@@ -645,6 +652,7 @@ class ThreadRunner:
             role=db.ROLE_ASSISTANT,
             text=parsed["reply"],
             proposals=json.dumps(parsed["proposed_entries"]),
+            steps=turn_steps,
         )
 
         fields: dict[str, Any] = {"status": db.THREAD_IDLE, "cost_usd": cost, "error": None}

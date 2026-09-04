@@ -132,6 +132,7 @@ data class ServerThreadMessage(
     val text: String = "",
     @SerializedName("image_count") val imageCount: Int = 0,
     val proposals: List<AiProposal> = emptyList(),
+    val steps: List<AiStep> = emptyList(),
     @SerializedName("created_at") val createdAt: Long = 0
 )
 

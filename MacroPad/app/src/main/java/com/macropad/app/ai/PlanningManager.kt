@@ -184,6 +184,7 @@ class PlanningManager(
                         text = message.text,
                         imageCount = message.imageCount,
                         proposalsJson = gson.toJson(message.proposals),
+                        steps = gson.toJson(message.steps),
                         createdAt = message.createdAt
                     )
                 }

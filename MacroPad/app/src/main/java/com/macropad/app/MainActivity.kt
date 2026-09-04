@@ -12,6 +12,10 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -179,13 +183,23 @@ fun MainScreen(
 
     val application = LocalContext.current.applicationContext as MacroPadApplication
     var updateAvailable by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        // Cheap: one call, only when a server is configured. The updater lives inside
-        // Settings, so without this nothing tells you a build is waiting.
-        val settings = repository.getAiSettings()
-        if (settings.isConfigured) {
-            updateAvailable = application.appUpdater.check().successOrNull != null
+
+    // On every resume, not once per composition. A warm start does not re-run
+    // LaunchedEffect(Unit), so a build published while the app sat in the background
+    // would never raise the dot — which is exactly when one usually appears.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    val settings = repository.getAiSettings()
+                    updateAvailable = settings.isConfigured &&
+                        application.appUpdater.check().successOrNull != null
+                }
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val incomingSetup by pendingSetup.collectAsState()
