@@ -85,8 +85,11 @@ fun AgentSteps(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
+                // Collapsed, the header carries the current step so the row is not
+                // just a number. Expanded, the list says it, so the header counts.
                 text = when {
-                    running && liveLine.isNotBlank() && !expanded -> liveLine
+                    !expanded && running && liveLine.isNotBlank() -> liveLine
+                    !expanded && running -> "Working"
                     steps.isEmpty() -> "Working"
                     steps.size == 1 -> "1 step"
                     else -> "${steps.size} steps"
@@ -120,14 +123,9 @@ fun AgentSteps(
                         )
                     }
                 }
-                if (running && liveLine.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        liveLine,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                // Nothing here: the step in progress is already the last entry in
+                // the list. Printing liveLine as well showed it twice, which is what
+                // the current step looked like duplicated.
             }
         }
     }

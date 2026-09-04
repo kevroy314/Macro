@@ -401,29 +401,22 @@ def _build_planning_options(
 
 
 class LiveProgress:
-    """Turns the SDK's stream into the line a waiting person sees.
+    """Turns the SDK's stream into the steps a waiting person sees.
 
-    The stream already says everything worth showing — thinking, tool calls, and the
-    answer arriving token by token — so this reports what is actually happening rather
-    than a fixed "working on it". Text wins over status lines once it starts: seeing
-    the reply form is the clearest possible signal that nothing is stuck.
+    Only discrete steps — thinking, a search, a page being read. An earlier version
+    also streamed the reply itself into this line, which arrived as a shifting window
+    of half a sentence and read as a rendering fault rather than as progress. The
+    answer is worth showing when it is finished; the work is worth showing while it
+    happens, and those are different things.
     """
-
-    #: Don't write to the database faster than this. A token-rate write loop would
-    #: cost far more than the reassurance is worth.
-    MIN_INTERVAL_MS = 900
-
-    #: Only the tail is kept — this is a status line, not the transcript.
-    MAX_CHARS = 400
 
     #: A cap on the step list. A long run can search a dozen times; nobody reads more.
     MAX_STEPS = 40
 
     def __init__(self, previous: list[dict[str, Any]] | None = None) -> None:
-        self.text = ""
         self.status = ""
         self.steps: list[dict[str, Any]] = list(previous or [])
-        self._last_write = 0.0
+        self._written = ""
 
     def observe(self, event: dict[str, Any]) -> None:
         """Fold one streaming event in."""
@@ -432,8 +425,10 @@ class LiveProgress:
         if kind == "content_block_start":
             block = event.get("content_block") or {}
             if block.get("type") == "tool_use":
-                self.status = _tool_note(block.get("name"), block.get("input"))
-                self._record(self.status)
+                note = _tool_note(block.get("name"), block.get("input"))
+                if note:
+                    self.status = note
+                    self._record(note)
             elif block.get("type") == "thinking":
                 self.status = "Thinking"
                 self._record("Thinking")
@@ -441,10 +436,9 @@ class LiveProgress:
 
         if kind == "content_block_delta":
             delta = event.get("delta") or {}
-            if delta.get("type") == "text_delta":
-                self.text += delta.get("text") or ""
-            elif delta.get("type") == "thinking_delta":
+            if delta.get("type") == "thinking_delta" and not self.status:
                 self.status = "Thinking"
+                self._record("Thinking")
 
     def _record(self, text: str) -> None:
         """Keep the step, so the work is still visible once the run is over.
@@ -464,16 +458,19 @@ class LiveProgress:
         return json.dumps(self.steps)
 
     def line(self) -> str:
-        """What to show: the answer so far, else the latest status."""
-        body = self.text.strip()
-        if body:
-            return body[-self.MAX_CHARS :]
+        """The step in progress right now."""
         return self.status
 
-    def should_write(self, now_ms: float) -> bool:
-        if now_ms - self._last_write < self.MIN_INTERVAL_MS:
+    def should_write(self, _now_ms: float = 0.0) -> bool:
+        """Only when something actually changed.
+
+        Steps change a handful of times per run, so this needs no rate limiting —
+        and writing on every token was what produced the flickering half-sentences.
+        """
+        current = self.line()
+        if current == self._written:
             return False
-        self._last_write = now_ms
+        self._written = current
         return True
 
 
@@ -491,7 +488,10 @@ def _tool_note(name: str | None, payload: Any) -> str:
         return f"Reading {host}" if host else "Reading a page"
     if tool == "Read":
         return "Looking at your photo"
-    return "Working"
+    # Anything else — the structured-output call the SDK makes to return JSON, for
+    # instance — is machinery, not work anyone asked about. Say nothing rather than
+    # padding the list with "Working".
+    return ""
 
 
 def _describe_step(block: Any) -> str:
@@ -621,7 +621,7 @@ class ThreadRunner:
                             # Fallback for when the partial stream is not delivering:
                             # better a coarse breadcrumb than a silent spinner.
                             note = _describe_step(block)
-                            if note and not live.text:
+                            if note and not live.steps:
                                 db.update_thread(thread_id, progress=note)
                 elif isinstance(message, ResultMessage):
                     db.update_thread(thread_id, session_id=message.session_id)

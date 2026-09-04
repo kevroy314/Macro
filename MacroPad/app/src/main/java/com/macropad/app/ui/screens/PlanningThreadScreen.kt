@@ -151,45 +151,18 @@ fun PlanningThreadScreen(
                     }
                 )
             }
-            if (busy) {
+            // Deliberately not inside `if (busy)`. The steps are the record of how
+            // the answer was reached, and hiding them the moment it arrives throws
+            // that away exactly when someone might want to look. AgentSteps owns the
+            // spinner and the current line, so there is only one of each.
+            val stepsJson = thread?.steps ?: "[]"
+            if (busy || stepsJson.length > 2) {
                 item {
-                    // What the assistant is doing, straight from the stream: a short
-                    // status while it thinks and searches, then the reply itself as it
-                    // is written. A silent two-minute spinner reads as a hang.
-                    val live = thread?.progress?.takeIf { it.isNotBlank() }
-                    val isAnswerForming = (live?.length ?: 0) > 60
-
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        verticalAlignment = if (isAnswerForming) {
-                            Alignment.Top
-                        } else {
-                            Alignment.CenterVertically
-                        }
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        if (isAnswerForming) {
-                            MarkdownText(
-                                text = live!!,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        } else {
-                            Text(
-                                live ?: "Working it out…",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    }
                     AgentSteps(
-                        stepsJson = thread?.steps ?: "[]",
+                        stepsJson = stepsJson,
                         running = busy,
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+                        liveLine = thread?.progress.orEmpty(),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
