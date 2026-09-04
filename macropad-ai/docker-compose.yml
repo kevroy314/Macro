@@ -14,6 +14,15 @@ services:
       # Seed only — see entrypoint.sh.
       - ${HOME}/.claude.json:/seed/claude.json:ro
       - ./data:/data
+    # Pin the container's upstream resolvers. Docker's embedded resolver otherwise
+    # forwards to whatever the host has at that moment, so a VPN coming up on the
+    # Windows host rewrites WSL's resolver and the container's DNS goes with it —
+    # which is how an estimate failed with "Unable to connect to API (ENOTIMP)".
+    # The agent only ever resolves public names; WebFetch is blocked from private
+    # hosts, so nothing here needs the LAN's resolver.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - ./data/env
     environment:

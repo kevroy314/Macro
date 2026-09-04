@@ -307,8 +307,17 @@ class JobRunner:
             raw_result = schema.extract_json(final_text)
 
         if raw_result is None:
-            detail = auth_error or "the agent did not return a JSON result"
-            raise schema.ResultError(detail)
+            # Prefer whatever the agent actually said over the terse category. A run
+            # that died on DNS reported itself as "server_error" while the text block
+            # read "Unable to connect to API (ENOTIMP)" — the second one tells you
+            # where to look, the first sends you hunting the wrong thing.
+            spoken = final_text.strip()
+            detail = (
+                spoken
+                if spoken.startswith("API Error")
+                else (auth_error or spoken or "the agent did not return a JSON result")
+            )
+            raise schema.ResultError(detail[:300])
 
         result = schema.normalise(raw_result)
         result = schema.filter_questions(

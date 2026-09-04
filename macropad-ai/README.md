@@ -215,6 +215,26 @@ the photos, the itemised numbers, the sources it used, and the session transcrip
 The web routes have no authentication of their own — they are meant to sit behind the
 reverse proxy's OAuth. Don't expose port 8321 directly.
 
+## When estimates fail
+
+The daemon's own health is rarely the problem; check what the agent said before
+assuming it is. `data/jobs/<id>/transcript.jsonl` has the real message, and the job's
+`error` now carries it too rather than the terse category.
+
+`API Error: Unable to connect to API (ENOTIMP)` is DNS, not the network being down —
+the resolver answered "not implemented". On Windows this usually means a VPN came up
+on the host, rewrote WSL's resolver, and took the container's DNS with it. The
+container's upstream resolvers are pinned in `docker-compose.yml` for that reason; the
+agent only resolves public names, so nothing here needs the LAN's resolver.
+
+To tell a genuine outage from a DNS problem:
+
+```bash
+docker compose exec macropad-ai python -c "import socket;print(socket.gethostbyname('api.anthropic.com'))"
+```
+
+A failed job keeps its photos and can be re-run from the app.
+
 ## Behind the home proxy
 
 A reverse proxy in front of this needs a `macropad.example.com` block that
