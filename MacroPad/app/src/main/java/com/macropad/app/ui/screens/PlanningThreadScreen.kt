@@ -139,23 +139,38 @@ fun PlanningThreadScreen(
             }
             if (busy) {
                 item {
+                    // What the assistant is doing, straight from the stream: a short
+                    // status while it thinks and searches, then the reply itself as it
+                    // is written. A silent two-minute spinner reads as a hang.
+                    val live = thread?.progress?.takeIf { it.isNotBlank() }
+                    val isAnswerForming = (live?.length ?: 0) > 60
+
                     Row(
                         modifier = Modifier.padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = if (isAnswerForming) {
+                            Alignment.Top
+                        } else {
+                            Alignment.CenterVertically
+                        }
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            // Say what it is actually doing. A silent two-minute
-                            // spinner is indistinguishable from a hang.
-                            thread?.progress?.takeIf { it.isNotBlank() }
-                                ?: "Working it out…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
+                        if (isAnswerForming) {
+                            MarkdownText(
+                                text = live!!,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        } else {
+                            Text(
+                                live ?: "Working it out…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
                     }
                 }
             }

@@ -26,6 +26,7 @@ from claude_agent_sdk import (
     PermissionResultDeny,
     ResultMessage,
     SystemMessage,
+    StreamEvent,
     TextBlock,
     ToolPermissionContext,
 )
@@ -358,9 +359,83 @@ def _build_planning_options(
         setting_sources=[],
         max_turns=config.MAX_TURNS,
         output_format=schema.PLANNING_OUTPUT_FORMAT,
+        # The stream is what makes a two-minute wait legible: thinking, tool calls,
+        # and the reply arriving as it is written.
+        include_partial_messages=True,
         resume=resume_session,
         env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     )
+
+
+class LiveProgress:
+    """Turns the SDK's stream into the line a waiting person sees.
+
+    The stream already says everything worth showing — thinking, tool calls, and the
+    answer arriving token by token — so this reports what is actually happening rather
+    than a fixed "working on it". Text wins over status lines once it starts: seeing
+    the reply form is the clearest possible signal that nothing is stuck.
+    """
+
+    #: Don't write to the database faster than this. A token-rate write loop would
+    #: cost far more than the reassurance is worth.
+    MIN_INTERVAL_MS = 900
+
+    #: Only the tail is kept — this is a status line, not the transcript.
+    MAX_CHARS = 400
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.status = ""
+        self._last_write = 0.0
+
+    def observe(self, event: dict[str, Any]) -> None:
+        """Fold one streaming event in."""
+        kind = event.get("type")
+
+        if kind == "content_block_start":
+            block = event.get("content_block") or {}
+            if block.get("type") == "tool_use":
+                self.status = _tool_note(block.get("name"), block.get("input"))
+            elif block.get("type") == "thinking":
+                self.status = "Thinking"
+            return
+
+        if kind == "content_block_delta":
+            delta = event.get("delta") or {}
+            if delta.get("type") == "text_delta":
+                self.text += delta.get("text") or ""
+            elif delta.get("type") == "thinking_delta":
+                self.status = "Thinking"
+
+    def line(self) -> str:
+        """What to show: the answer so far, else the latest status."""
+        body = self.text.strip()
+        if body:
+            return body[-self.MAX_CHARS :]
+        return self.status
+
+    def should_write(self, now_ms: float) -> bool:
+        if now_ms - self._last_write < self.MIN_INTERVAL_MS:
+            return False
+        self._last_write = now_ms
+        return True
+
+
+def _tool_note(name: str | None, payload: Any) -> str:
+    """A tool call, described for the person waiting rather than by tool name."""
+    tool = name or ""
+    data = payload if isinstance(payload, dict) else {}
+
+    if tool == "WebSearch":
+        query = str(data.get("query") or "").strip()
+        return f"Searching for {query}" if query else "Searching the web"
+    if tool == "WebFetch":
+        url = str(data.get("url") or "")
+        host = urlparse(url).netloc.removeprefix("www.")
+        return f"Reading {host}" if host else "Reading a page"
+    if tool == "Read":
+        return "Looking at your photo"
+    return "Working"
 
 
 def _describe_step(block: Any) -> str:
@@ -374,21 +449,7 @@ def _describe_step(block: Any) -> str:
     if name not in ("ToolUseBlock", "ServerToolUseBlock"):
         return ""
 
-    tool = getattr(block, "name", "") or ""
-    payload = getattr(block, "input", None) or {}
-    if not isinstance(payload, dict):
-        payload = {}
-
-    if tool == "WebSearch":
-        query = str(payload.get("query") or "").strip()
-        return f"Searching for {query}" if query else "Searching the web"
-    if tool == "WebFetch":
-        url = str(payload.get("url") or "")
-        host = urlparse(url).netloc.removeprefix("www.")
-        return f"Reading {host}" if host else "Reading a page"
-    if tool == "Read":
-        return "Looking at your photo"
-    return "Working"
+    return _tool_note(getattr(block, "name", ""), getattr(block, "input", None))
 
 
 class ThreadRunner:
@@ -477,8 +538,16 @@ class ThreadRunner:
             self._clients[thread_id] = client
             await client.query(prompt)
 
+            live = LiveProgress()
+
             async for message in client.receive_response():
                 _append_transcript(directory / "transcript.jsonl", message)
+
+                if isinstance(message, StreamEvent):
+                    live.observe(message.event or {})
+                    if live.should_write(db.now_ms()):
+                        db.update_thread(thread_id, progress=live.line())
+                    continue
 
                 if isinstance(message, SystemMessage) and message.subtype == "init":
                     session_id = message.data.get("session_id")
@@ -491,8 +560,10 @@ class ThreadRunner:
                         if isinstance(block, TextBlock):
                             final_text = block.text
                         else:
+                            # Fallback for when the partial stream is not delivering:
+                            # better a coarse breadcrumb than a silent spinner.
                             note = _describe_step(block)
-                            if note:
+                            if note and not live.text:
                                 db.update_thread(thread_id, progress=note)
                 elif isinstance(message, ResultMessage):
                     db.update_thread(thread_id, session_id=message.session_id)
