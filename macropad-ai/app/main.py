@@ -596,6 +596,21 @@ async def create_user(
         raise HTTPException(status_code=400, detail="A name is required")
     email = str(payload.get("email") or "").strip()
 
+    # Re-inviting someone shows their existing code again rather than minting a
+    # second account. Tapping Invite twice used to create a duplicate, which then
+    # split that person's jobs and backups across two identities depending on which
+    # QR they happened to scan.
+    existing = users.by_email(email) if email else None
+    if existing is not None:
+        log.info("re-shared %s's setup code", existing.id)
+        return {
+            "id": existing.id,
+            "name": existing.name,
+            "email": existing.email,
+            "key": existing.key,
+            "existing": True,
+        }
+
     base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "user"
     user_id = base
     suffix = 2
@@ -605,7 +620,13 @@ async def create_user(
 
     created = users.add_user(user_id, name, email)
     log.info("user %s invited by %s", created.id, user.id)
-    return {"id": created.id, "name": created.name, "email": created.email, "key": created.key}
+    return {
+        "id": created.id,
+        "name": created.name,
+        "email": created.email,
+        "key": created.key,
+        "existing": False,
+    }
 
 
 @app.get(f"{API}/whoami")
@@ -662,7 +683,12 @@ async def download_release(
         presented = authorization[7:].strip()
     if not presented:
         presented = x_macropad_key
-    if not presented or not hmac.compare_digest(presented.strip(), auth.api_key()):
+
+    # Any valid user, not just the primary one. This compared against the primary
+    # key alone, which predated multi-user and quietly locked everyone else out of
+    # updating the app — the one endpoint where that failure is self-perpetuating,
+    # since you need the update to get the fix.
+    if not presented or users.by_key(presented.strip()) is None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     path = releases.release_path(filename)

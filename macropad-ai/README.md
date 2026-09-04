@@ -82,7 +82,8 @@ estimates, or conversations — cross-user reads and writes return 404, and the 
 shows only the jobs belonging to the Google address you signed in with.
 
 From the app: **Settings → Share & Invite → Invite someone**. It creates their key and
-shows a QR code they scan from *their* Settings → Scan a setup code. "Share the app
+shows a QR code they scan from *their* Settings → Scan a setup code. Inviting the same
+email again re-shares that person's existing code rather than making a second account. "Share the app
 itself" shows a QR of the APK download link for installing in the first place.
 
 From the shell:
@@ -152,7 +153,9 @@ RELEASE_NOTES="fixed the widget refresh" ./build_release.sh
 ```
 
 The web log also shows a plain download link, which works in a browser because the
-download endpoint accepts `?key=<apikey>` as well as the header.
+download endpoint accepts `?key=<apikey>` as well as the header. Any user's key is
+accepted, not only the primary one — everyone sharing the server needs to be able to
+update the app.
 
 The updater only appears when an AI server is configured. That is deliberate: Google
 Play forbids an app distributed there from updating itself by any other route, and a
