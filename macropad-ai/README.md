@@ -217,35 +217,76 @@ reverse proxy's OAuth. Don't expose port 8321 directly.
 
 ## When estimates fail
 
-The daemon's own health is rarely the problem; check what the agent said before
-assuming it is. `data/jobs/<id>/transcript.jsonl` has the real message, and the job's
-`error` now carries it too rather than the terse category.
-
-`API Error: Unable to connect to API (ENOTIMP)` is DNS, not the network being down —
-the resolver answered "not implemented". On Windows this usually means a VPN came up
-on the host, rewrote WSL's resolver, and took the container's DNS with it. The
-container's upstream resolvers are pinned in `docker-compose.yml` for that reason; the
-agent only resolves public names, so nothing here needs the LAN's resolver.
+Check what the agent said before assuming the daemon or Anthropic is at fault:
 
 ```bash
 docker compose exec macropad-ai python -m app.cli doctor
 ```
 
-`doctor` checks the resolver, both A and AAAA lookups, whether Anthropic answers, and
-whether the credentials are mounted — in the order they break. Note that inbound
-traffic working proves nothing here: a reverse proxy serving pages, or an SSH session
-into this machine, never asks it to resolve an outbound name. Only the agent does.
+`doctor` checks the resolver, A and AAAA lookups, whether Anthropic answers, and
+whether the credentials are mounted — in the order they break. When DNS fails it also
+probes TCP 443, because DNS down with egress up means something very different from
+both being down.
 
-When DNS fails, `doctor` also checks whether anything gets out at all. DNS down with
-TCP/443 still working means something on the host — usually a VPN — is dropping port 53
-from the container's network while leaving other traffic alone. Confirmed on this setup:
-with the VPN up, the container could not reach 1.1.1.1, 8.8.8.8 or the Windows resolver
-on port 53, over UDP or TCP, while a TLS connection to Anthropic by IP succeeded and
-WSL's own resolution kept working.
+Inbound traffic working proves nothing here. A reverse proxy serving pages, or a shell
+session into this machine, never asks it to resolve an outbound name. Only the agent
+does, which is why the daemon can look perfectly healthy while every estimate fails.
 
-Pinning resolvers does not help that, because the problem is not which resolver but
-that port 53 never leaves the bridge. The fix is to split-tunnel the Docker bridge
-subnet (`docker network inspect macropad-ai_default` prints it) or to drop the VPN.
+### A VPN on the host breaks the container's DNS
+
+Measured on a Windows host running WSL, with PIA connected:
+
+| From the container | Result |
+|---|---|
+| DNS, A and AAAA | fails entirely |
+| UDP 53 to 1.1.1.1, 8.8.8.8, or the host resolver | timeout |
+| TCP 53 to the same | refused |
+| TCP 443 to Anthropic by IP | **works** |
+
+| From WSL itself | Result |
+|---|---|
+| resolving any name | **works** |
+
+So the VPN drops port 53 out of Docker's bridge while leaving everything else alone.
+Nothing else on the machine notices, because nothing else asks the container to
+resolve anything. It is not protocol-specific — OpenVPN and WireGuard behave
+identically — and `allowlan` being enabled does not help.
+
+Pinning resolvers does not fix it either. The problem is not which resolver, it is
+that port 53 never leaves the bridge.
+
+Three ways out, in order of how little they cost:
+
+**Disconnect the VPN while estimating.** Nothing to configure.
+
+**Split-tunnel WSL.** PIA can only exclude whole Windows processes, and the one to
+exclude is `C:\Program Files\WSL\wslservice.exe` — there is no Docker process on the
+Windows side to pick. That takes *all* WSL traffic outside the VPN, which may be more
+than you want.
+
+**Resolve over HTTPS.** A sidecar answers DNS on the bridge, where container traffic
+never leaves the host and so cannot be intercepted, and forwards upstream over TCP 443
+— which the VPN leaves alone.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.doh.yml up -d
+```
+
+To make it permanent on one machine, without imposing it on anyone else, put this in
+`macropad-ai/.env` (git-ignored):
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.doh.yml
+```
+
+Then plain `docker compose up -d` keeps the sidecar. Without it, a routine restart
+silently drops the overlay and DNS starts failing again the next time the VPN is up.
+
+This is not the default. It is an extra container and a new way for DNS to break, and
+most hosts do not need it — `doctor` says whether yours does. The sidecar image is
+pinned rather than tracking `latest`: cloudflared was the obvious choice here until it
+removed its DNS proxy in a release, and the container then started up only to log that
+the feature was gone.
 
 A failed job keeps its photos and can be re-run from the app.
 

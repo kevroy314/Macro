@@ -177,4 +177,5 @@ Tell them, briefly:
 | App can't find the server after a router restart | DHCP moved it. Settings → **Find on network**, or check mDNS is running. |
 | Jobs stay "queued" at home | The phone is on a guest network, or on cellular with wifi off. |
 | Estimates fail with an auth error | `docker compose exec macropad-ai claude` and sign in again. |
+| Estimates fail but the daemon looks healthy | Run `python -m app.cli doctor`. A VPN on the host can drop port 53 out of Docker's bridge while leaving other traffic alone — the daemon serves fine and every estimate fails. `docker-compose.doh.yml` resolves over HTTPS instead. |
 | Nothing works after a reboot on Windows | WSL doesn't start at boot on its own. This is a known rough edge — a scheduled task is the workaround. |

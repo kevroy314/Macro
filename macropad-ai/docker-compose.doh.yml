@@ -1,0 +1,48 @@
+# Resolve over HTTPS instead of port 53.
+#
+# For a host where something — a VPN, a corporate firewall — drops port 53 out of
+# Docker's bridge while leaving other traffic alone. The daemon's estimates then fail
+# with "Unable to connect to API", which looks like an outage and is not one.
+#
+# A sidecar resolver answers on the bridge, where container-to-container traffic never
+# leaves the host and so cannot be intercepted, and forwards upstream over TCP 443.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.doh.yml up -d
+#
+# Not the default: it is an extra moving part and a new way for DNS to break, and most
+# hosts do not need it. `python -m app.cli doctor` says whether yours does.
+
+services:
+  dns-proxy:
+    # Pinned, not :latest. cloudflared was the obvious choice here until it removed
+    # proxy-dns in a release and the sidecar started up only to log that it was no
+    # longer supported.
+    image: adguard/dnsproxy:v0.84.2
+    container_name: macropad-dns
+    restart: unless-stopped
+    command: >
+      --listen=0.0.0.0 --port=53
+      --upstream=https://1.1.1.1/dns-query
+      --upstream=https://8.8.8.8/dns-query
+    networks:
+      macropad:
+        # Fixed, because the daemon has to be told a resolver by address — it cannot
+        # look up the name of the thing that does the looking up. This subnet was
+        # picked to avoid the ones this machine already uses; `docker network ls`
+        # and inspect will show if it ever collides.
+        ipv4_address: 192.168.208.53
+
+  macropad-ai:
+    dns:
+      - 192.168.208.53
+    depends_on:
+      - dns-proxy
+    networks:
+      - macropad
+
+networks:
+  macropad:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.208.0/24

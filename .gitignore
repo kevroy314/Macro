@@ -33,3 +33,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Per-machine compose overlay selection, not a project default.
+macropad-ai/.env
