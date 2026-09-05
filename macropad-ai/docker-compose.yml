@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     user: "1000:1000"
     ports:
-      - "8321:8321"
+      - "${MACROPAD_PORT:-8321}:8321"
     volumes:
       # Shared credentials: host and container use the same .credentials.json so
       # OAuth refreshes stay in sync.
@@ -21,8 +21,8 @@ services:
     # The agent only ever resolves public names; WebFetch is blocked from private
     # hosts, so nothing here needs the LAN's resolver.
     dns:
-      - 1.1.1.1
-      - 8.8.8.8
+      - ${MACROPAD_DNS1:-1.1.1.1}
+      - ${MACROPAD_DNS2:-8.8.8.8}
     env_file:
       - ./data/env
     environment:

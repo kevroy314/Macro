@@ -10,6 +10,7 @@ import asyncio
 import ipaddress
 import json
 import logging
+import os
 import socket
 import uuid
 from datetime import date
@@ -423,7 +424,7 @@ class LiveProgress:
     """
 
     #: A cap on the step list. A long run can search a dozen times; nobody reads more.
-    MAX_STEPS = 40
+    MAX_STEPS = int(os.environ.get("MACROPAD_MAX_STEPS", "40"))
 
     def __init__(self, previous: list[dict[str, Any]] | None = None) -> None:
         self.status = ""

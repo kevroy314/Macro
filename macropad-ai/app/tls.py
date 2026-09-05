@@ -16,6 +16,7 @@ import base64
 import datetime as dt
 import hashlib
 import ipaddress
+import os
 import socket
 from pathlib import Path
 
@@ -26,11 +27,11 @@ CERT_PATH = TLS_DIR / "cert.pem"
 KEY_PATH = TLS_DIR / "key.pem"
 
 #: The mDNS name the installer publishes for this machine.
-LOCAL_NAME = "macropad.local"
+LOCAL_NAME = os.environ.get("MACROPAD_LOCAL_NAME", "macropad.local")
 
 #: Ten years. Rotating it means re-pairing every phone, which is worse than a long life
 #: for a key that never leaves the house.
-VALID_DAYS = 3650
+VALID_DAYS = int(os.environ.get("MACROPAD_CERT_DAYS", "3650"))
 
 
 def is_enabled() -> bool:

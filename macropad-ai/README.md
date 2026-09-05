@@ -313,6 +313,22 @@ splits the two audiences:
 | `MACROPAD_MAX_IMAGE_EDGE` | `1600` | Photos are downscaled to this long edge |
 | `MACROPAD_MAX_IMAGES` | `6` | Images per job |
 | `MACROPAD_PUBLIC_URL` | unset | Override the address put into setup QR codes |
+| `MACROPAD_MAX_STEPS` | `40` | Steps kept per run for the app's step list |
+| `MACROPAD_PORT` | `8321` | Host port the daemon is published on |
+| `MACROPAD_DNS1` / `MACROPAD_DNS2` | `1.1.1.1` / `8.8.8.8` | Upstream resolvers for the container |
+| `MACROPAD_LOCAL_NAME` | `macropad.local` | Name the self-signed certificate is issued for |
+| `MACROPAD_CERT_DAYS` | `3650` | Certificate lifetime. Replacing it re-pairs every phone |
+| `MACROPAD_KEEP_ALL_HOURS` | `48` | Keep every backup this recent |
+| `MACROPAD_KEEP_DAILY_DAYS` | `30` | Then one a day, for this long |
+| `MACROPAD_KEEP_WEEKLY_DAYS` | `365` | Then one a week, for this long |
+| `MACROPAD_BACKUP_MAX_BYTES` | `33554432` | Largest backup accepted |
+| `MACROPAD_DOH_SUBNET` | `192.168.208.0/24` | Subnet for the DNS-over-HTTPS overlay |
+| `MACROPAD_DOH_IP` | `192.168.208.53` | Address the overlay's resolver answers on |
+| `MACROPAD_DOH1` / `MACROPAD_DOH2` | Cloudflare / Google | Upstream DoH endpoints |
+
+The last three matter only with `docker-compose.doh.yml`. Change the subnet if it
+collides with a network you already have — compose refuses to start with a pool-overlap
+error rather than failing quietly, so you will know.
 
 ## Data
 

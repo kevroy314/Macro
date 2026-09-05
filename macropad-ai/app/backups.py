@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import time
@@ -30,13 +31,13 @@ from . import config
 log = logging.getLogger("macropad.backups")
 
 BACKUP_DIR = config.DATA_DIR / "backups"
-MAX_BYTES = 32 * 1024 * 1024
+MAX_BYTES = int(os.environ.get("MACROPAD_BACKUP_MAX_BYTES", 32 * 1024 * 1024))
 
 #: Retention, applied newest first: keep everything recent, then one per day, then one
 #: per week. A year of history costs a few megabytes at this payload size.
-KEEP_ALL_HOURS = 48
-KEEP_DAILY_FOR_DAYS = 30
-KEEP_WEEKLY_FOR_DAYS = 365
+KEEP_ALL_HOURS = int(os.environ.get("MACROPAD_KEEP_ALL_HOURS", "48"))
+KEEP_DAILY_FOR_DAYS = int(os.environ.get("MACROPAD_KEEP_DAILY_DAYS", "30"))
+KEEP_WEEKLY_FOR_DAYS = int(os.environ.get("MACROPAD_KEEP_WEEKLY_DAYS", "365"))
 
 
 def ensure_dir() -> None:

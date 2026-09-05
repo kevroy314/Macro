@@ -22,19 +22,20 @@ services:
     restart: unless-stopped
     command: >
       --listen=0.0.0.0 --port=53
-      --upstream=https://1.1.1.1/dns-query
-      --upstream=https://8.8.8.8/dns-query
+      --upstream=${MACROPAD_DOH1:-https://1.1.1.1/dns-query}
+      --upstream=${MACROPAD_DOH2:-https://8.8.8.8/dns-query}
     networks:
       macropad:
         # Fixed, because the daemon has to be told a resolver by address — it cannot
         # look up the name of the thing that does the looking up. This subnet was
-        # picked to avoid the ones this machine already uses; `docker network ls`
-        # and inspect will show if it ever collides.
-        ipv4_address: 192.168.208.53
+        # picked to avoid the ones this machine already uses. If it collides with a
+        # network you already have, compose refuses to start with a pool-overlap
+        # error — set MACROPAD_DOH_SUBNET and MACROPAD_DOH_IP in data/env to move it.
+        ipv4_address: ${MACROPAD_DOH_IP:-192.168.208.53}
 
   macropad-ai:
     dns:
-      - 192.168.208.53
+      - ${MACROPAD_DOH_IP:-192.168.208.53}
     depends_on:
       - dns-proxy
     networks:
@@ -45,4 +46,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 192.168.208.0/24
+        - subnet: ${MACROPAD_DOH_SUBNET:-192.168.208.0/24}
