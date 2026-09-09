@@ -535,8 +535,12 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned {
+                    // positionInParent is already content-space for a scrolling
+                    // Column, so it must not have the scroll offset added to it.
+                    // Doing so double-counts and overshoots by however far the list
+                    // had already moved when the callback fired.
                     cardOffsets[SettingsHighlight.TARGETS] =
-                        it.positionInParent().y.toInt() + scrollState.value
+                        it.positionInParent().y.toInt()
                 }
                 .then(highlightBorder(highlight == SettingsHighlight.TARGETS))
         ) {
@@ -640,7 +644,7 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .onGloballyPositioned {
                     cardOffsets[SettingsHighlight.DAY_RESET] =
-                        it.positionInParent().y.toInt() + scrollState.value
+                        it.positionInParent().y.toInt()
                 }
                 .then(highlightBorder(highlight == SettingsHighlight.DAY_RESET))
         ) {
