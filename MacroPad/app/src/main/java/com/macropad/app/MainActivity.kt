@@ -18,6 +18,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -361,14 +364,33 @@ fun MainScreen(
             // Only while the walkthrough is parked mid-way. It sent you here to change
             // something; this is how you get back without starting over.
             if (tourResumeAt != null) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        settingsHighlight = null
-                        onboarding = true
-                    },
-                    icon = { Icon(Icons.Default.School, contentDescription = null) },
-                    text = { Text("Resume setup") }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Dismiss without going back in. Having to re-enter the tour just
+                    // to press Skip is a worse ending than the one being skipped.
+                    SmallFloatingActionButton(
+                        onClick = {
+                            scope.launch { repository.markOnboardingSeen() }
+                            tourResumeAt = null
+                            settingsHighlight = null
+                        },
+                        // surfaceVariant is SurfaceAlt here, all but identical to the
+                        // card behind it — the button rendered as a bare X floating
+                        // over the text. secondaryContainer is the raised one.
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Dismiss setup")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            settingsHighlight = null
+                            onboarding = true
+                        },
+                        icon = { Icon(Icons.Default.School, contentDescription = null) },
+                        text = { Text("Resume setup") }
+                    )
+                }
             }
         }
     ) { paddingValues ->
