@@ -16,6 +16,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material.icons.filled.School
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -187,6 +189,12 @@ fun MainScreen(
     var onboarding by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(Unit) { onboarding = repository.shouldShowOnboarding() }
 
+    // Where the walkthrough was when it sent someone off to change a setting, and
+    // which setting to point at when they get there. Leaving the tour to do the thing
+    // it just asked for should not mean losing your place in it.
+    var tourResumeAt by remember { mutableStateOf<Int?>(null) }
+    var settingsHighlight by remember { mutableStateOf<String?>(null) }
+
     var updateAvailable by remember { mutableStateOf(false) }
 
     // On every resume, not once per composition. A warm start does not re-run
@@ -281,21 +289,33 @@ fun MainScreen(
     if (onboarding == null) return
     if (onboarding == true) {
         GettingStartedScreen(
+            startIndex = tourResumeAt ?: 0,
             onFinish = {
                 scope.launch { repository.markOnboardingSeen() }
+                tourResumeAt = null
+                settingsHighlight = null
                 onboarding = false
             },
-            onOpenSettings = {
-                pendingRoute.value = Screen.Settings.route
-            },
-            onOpenAiSetup = {
-                runCatching {
-                    context.startActivity(
-                        android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://kevroy314.github.io/Macro/self-hosting")
+            onJumpTo = { target, atStep ->
+                tourResumeAt = atStep
+                onboarding = false
+                when (target) {
+                    GettingStartedTarget.AI_SETUP -> runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://kevroy314.github.io/Macro/self-hosting")
+                            )
                         )
-                    )
+                    }
+                    GettingStartedTarget.DAY_RESET -> {
+                        settingsHighlight = SettingsHighlight.DAY_RESET
+                        pendingRoute.value = Screen.Settings.route
+                    }
+                    GettingStartedTarget.TARGETS -> {
+                        settingsHighlight = SettingsHighlight.TARGETS
+                        pendingRoute.value = Screen.Settings.route
+                    }
                 }
             }
         )
@@ -335,6 +355,20 @@ fun MainScreen(
                         )
                     }
                 }
+            }
+        },
+        floatingActionButton = {
+            // Only while the walkthrough is parked mid-way. It sent you here to change
+            // something; this is how you get back without starting over.
+            if (tourResumeAt != null) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        settingsHighlight = null
+                        onboarding = true
+                    },
+                    icon = { Icon(Icons.Default.School, contentDescription = null) },
+                    text = { Text("Resume setup") }
+                )
             }
         }
     ) { paddingValues ->
@@ -666,7 +700,8 @@ fun MainScreen(
                             )
                         )
                     },
-                    onShowGettingStarted = { onboarding = true },
+                    onShowGettingStarted = { tourResumeAt = null; onboarding = true },
+                    highlight = settingsHighlight,
                     onDismissWhatsNew = {
                         scope.launch {
                             val settings = repository.getAiSettings()

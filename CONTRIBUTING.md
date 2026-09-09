@@ -127,6 +127,35 @@ result against the schema Room generates from the entities, checking column type
 nullability, indices, and that no rows are lost. It catches the class of mistake that
 silently corrupts someone's history, so run it on any schema change.
 
+### Look at it on a device
+
+There is an emulator, and the `android-device` skill drives it from here:
+`up.sh`, `install.sh macropad`, then `ux.sh shot` and `ux.sh ui`. Use it for
+anything visual. A getting-started screen shipped with its heading invisible —
+present in the view hierarchy, rendered in a colour indistinguishable from the
+background — and it compiled, passed review, and read as clumsy copy rather than
+as a bug until someone opened the app.
+
+`ux.sh ui` is the one that settles arguments: it lists every element with its text,
+tap point and size, so "the title is missing" and "the title is invisible" stop
+looking the same.
+
+### Always give Text an explicit colour
+
+`Text(...)` with no `color` inherits `LocalContentColor`, which outside a themed
+surface is near enough to the background to vanish. Three bugs in this app have now
+come from text colour, and this was the worst of them because nothing looked wrong
+in the code. Pass `color = MaterialTheme.colorScheme.onSurface` — or whichever token
+is right — every time.
+
+### One-shot effects must be one-shot
+
+`LaunchedEffect(key)` re-runs whenever the key changes, and a scroll inside one will
+fight the user for the list. Scrolling to a highlighted card re-pinned it on every
+recomposition, so the settings screen silently swallowed every swipe and looked
+frozen. Guard with a "have I already done this" flag rather than assuming the effect
+runs once.
+
 ### What can't be tested here
 
 There is no device or emulator in this loop, so **Compose UI changes ship unverified by

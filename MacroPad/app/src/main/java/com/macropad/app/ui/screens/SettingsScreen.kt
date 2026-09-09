@@ -13,6 +13,11 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -51,6 +56,25 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** A ring around the card the walkthrough sent you to, so it is obvious which one. */
+@Composable
+private fun highlightBorder(active: Boolean): Modifier =
+    if (active) {
+        Modifier.border(
+            width = 2.dp,
+            color = MaterialTheme.colorScheme.primary,
+            shape = RoundedCornerShape(12.dp)
+        )
+    } else {
+        Modifier
+    }
+
+/** Which card the walkthrough wants brought into view. */
+object SettingsHighlight {
+    const val DAY_RESET = "day_reset"
+    const val TARGETS = "targets"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -69,6 +93,7 @@ fun SettingsScreen(
     onRememberUpdateNotes: suspend (ServerRelease) -> Unit = {},
     onDismissWhatsNew: () -> Unit = {},
     onShowGettingStarted: () -> Unit = {},
+    highlight: String? = null,
     getAllMacros: suspend () -> List<DailyMacro>,
     getAllPresets: suspend () -> List<MacroPreset>,
     getTarget: suspend () -> MacroTarget,
@@ -98,6 +123,23 @@ fun SettingsScreen(
     var lastSyncTime by remember { mutableStateOf(app.dropboxManager.lastSyncTime) }
 
     val scrollState = rememberScrollState()
+
+    // Where the walkthrough's "Set your targets" and "Set the reset hour" buttons land.
+    // Sending someone to the Settings screen and letting them hunt is most of what
+    // made the tour feel like homework.
+    val cardOffsets = remember { mutableStateMapOf<String, Int>() }
+    // Scroll to it once and then let go. Re-running on every recomposition pins the
+    // list there and quietly swallows the user's own scrolling, which reads as the
+    // screen being frozen.
+    var scrolledFor by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(highlight, cardOffsets[highlight]) {
+        val target = highlight ?: return@LaunchedEffect
+        if (scrolledFor == target) return@LaunchedEffect
+        val y = cardOffsets[target] ?: return@LaunchedEffect
+        // A little above the card, so it does not sit flush against the status bar.
+        scrollState.animateScrollTo((y - 48).coerceAtLeast(0))
+        scrolledFor = target
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Check Dropbox auth state when screen resumes (after returning from browser auth)
@@ -211,6 +253,41 @@ fun SettingsScreen(
                     )
                 }
                 TextButton(onClick = onShowGettingStarted) { Text("Show") }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Its own card on purpose. This lived inside the AI card's expanded section,
+        // where it was invisible unless you happened to tap that card open.
+        val aiForAlcohol by aiSettingsFlow.collectAsState(initial = null)
+        val alcoholSettings = aiForAlcohol ?: AiSettings()
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Count alcohol as carbs",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Alcohol is none of protein, carbs or fat, so without this a " +
+                            "couple of drinks vanish from the day. On, their calories " +
+                            "are counted as carbs.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = alcoholSettings.alcoholAsCarbs,
+                    onCheckedChange = { on ->
+                        onSaveAiSettings(alcoholSettings.copy(alcoholAsCarbs = on))
+                    }
+                )
             }
         }
 
@@ -454,7 +531,15 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Daily Targets Section
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned {
+                    cardOffsets[SettingsHighlight.TARGETS] =
+                        it.positionInParent().y.toInt() + scrollState.value
+                }
+                .then(highlightBorder(highlight == SettingsHighlight.TARGETS))
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -550,7 +635,15 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Day Reset Time Section
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned {
+                    cardOffsets[SettingsHighlight.DAY_RESET] =
+                        it.positionInParent().y.toInt() + scrollState.value
+                }
+                .then(highlightBorder(highlight == SettingsHighlight.DAY_RESET))
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -735,7 +828,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "MacroPad v2.0.4",
+                    text = "MacroPad v${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
@@ -1653,28 +1746,6 @@ fun AiEstimatorCard(
                 testStatus?.let {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Count alcohol as carbs", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Alcohol is none of protein, carbs or fat, so without this " +
-                                "a couple of drinks vanish from the day. On, their " +
-                                "calories are added as carbs.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                    Switch(
-                        checked = current.alcoholAsCarbs,
-                        onCheckedChange = { on -> onSave(current.copy(alcoholAsCarbs = on)) }
-                    )
                 }
 
                 if (current.certPin.isNotBlank()) {
