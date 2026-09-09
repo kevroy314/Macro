@@ -41,6 +41,15 @@ data class AiSettings(
      * say what changed once it is running — knowing beforehand is only half of it.
      * Cleared once the user has seen them.
      */
+    /**
+     * Count alcohol as carbohydrate when estimating.
+     *
+     * On by default. Alcohol is 7 calories per gram and is none of protein, carbs or
+     * fat, so without this two drinks simply vanish from a day's totals — which is
+     * the wrong answer far more often than counting them is.
+     */
+    val alcoholAsCarbs: Boolean = true,
+
     val lastUpdateNotes: String = "",
     val lastUpdateVersionCode: Int = 0,
 

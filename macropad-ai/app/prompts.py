@@ -52,12 +52,29 @@ Your final message must be the JSON result. No preamble, no commentary around it
 """
 
 
+#: Alcohol is 7 calories per gram and is none of protein, carbohydrate or fat, so it
+#: falls out of a P/C/F total entirely — two drinks can vanish from a day. Counting it
+#: as carbohydrate at 4 calories per gram keeps the calorie maths honest.
+ALCOHOL_AS_CARBS = """\
+The user counts alcohol as carbohydrate. Alcohol is 7 calories per gram and is not \
+protein, carbohydrate or fat, so it would otherwise disappear from the totals \
+entirely. If anything here contains alcohol, convert its alcohol calories into \
+carbohydrate grams at 4 calories per gram and add them to the carbs figure, on top of \
+any carbohydrate the drink already contains. Say in the summary that you did this and \
+how many grams it added."""
+
+ALCOHOL_IGNORED = """\
+The user does not count alcohol. Include only the protein, carbohydrate and fat the \
+drink itself contains, and leave the alcohol calories out of the totals."""
+
+
 def build_task_prompt(
     user_text: str,
     image_names: list[str],
     today: str,
     threshold_mode: str,
     threshold_value: float,
+    alcohol_as_carbs: bool = True,
 ) -> str:
     if threshold_mode == "absolute":
         threshold_line = (
@@ -91,6 +108,8 @@ User's note:
 \"\"\"
 
 {threshold_line}
+
+{ALCOHOL_AS_CARBS if alcohol_as_carbs else ALCOHOL_IGNORED}
 
 Estimate the macros for what the user ate and return the JSON result."""
 

@@ -8,6 +8,19 @@ improvement.
 
 This document is the part that isn't obvious from reading the code.
 
+## Licence
+
+MacroPad is under the [PolyForm Noncommercial License 1.0.0](LICENSE). Contributions
+are accepted on the same terms — by opening a pull request you are licensing your
+changes under it. Anyone may use, modify and share the result for any noncommercial
+purpose; selling it, or building a commercial product or service on it, needs a
+separate agreement with the maintainer.
+
+It is source-available rather than OSI open source, and the docs say so in those words.
+Don't reintroduce "open source" or "MIT" anywhere — the site claimed MIT for a while
+with no LICENSE file behind it, which is the kind of thing that matters precisely when
+someone relies on it.
+
 ## Approval
 
 **[@kevroy314](https://github.com/kevroy314) is the maintainer and approves features.**

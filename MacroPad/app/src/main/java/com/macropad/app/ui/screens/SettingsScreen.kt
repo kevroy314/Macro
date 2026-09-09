@@ -68,6 +68,7 @@ fun SettingsScreen(
     onSetAutoBackup: (Boolean) -> Unit = {},
     onRememberUpdateNotes: suspend (ServerRelease) -> Unit = {},
     onDismissWhatsNew: () -> Unit = {},
+    onShowGettingStarted: () -> Unit = {},
     getAllMacros: suspend () -> List<DailyMacro>,
     getAllPresets: suspend () -> List<MacroPreset>,
     getTarget: suspend () -> MacroTarget,
@@ -192,6 +193,28 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // First thing in Settings, because someone looking for help looks here.
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.School, contentDescription = null)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Getting started", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Widgets, what to log, and the settings worth changing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+                TextButton(onClick = onShowGettingStarted) { Text("Show") }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // AI Estimator Section
         AiEstimatorCard(
@@ -1630,6 +1653,28 @@ fun AiEstimatorCard(
                 testStatus?.let {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Count alcohol as carbs", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Alcohol is none of protein, carbs or fat, so without this " +
+                                "a couple of drinks vanish from the day. On, their " +
+                                "calories are added as carbs.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Switch(
+                        checked = current.alcoholAsCarbs,
+                        onCheckedChange = { on -> onSave(current.copy(alcoholAsCarbs = on)) }
+                    )
                 }
 
                 if (current.certPin.isNotBlank()) {

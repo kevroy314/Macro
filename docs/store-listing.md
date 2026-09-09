@@ -41,7 +41,7 @@ Perfect for:
 - Users tired of bloated calorie counting apps
 
 **OPEN SOURCE**
-MacroPad is completely open source. Review the code, suggest improvements, or contribute at github.com/kevroy314/Macro
+MacroPad's source is public and licensed for noncommercial use. Review the code, suggest improvements, or contribute at github.com/kevroy314/Macro
 
 ---
 

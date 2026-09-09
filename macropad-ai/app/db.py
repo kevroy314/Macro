@@ -100,6 +100,14 @@ def _add_progress_column(conn: sqlite3.Connection) -> None:
             "ALTER TABLE thread_messages ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'"
         )
 
+    # Whether alcohol counts as carbohydrate, per job, so a follow-up or a correction
+    # is judged by the same rule the original estimate used.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+    if "alcohol_as_carbs" not in columns:
+        conn.execute(
+            "ALTER TABLE jobs ADD COLUMN alcohol_as_carbs INTEGER NOT NULL DEFAULT 1"
+        )
+
     for table in ("threads", "jobs"):
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if "progress" not in columns:
@@ -155,13 +163,14 @@ def create_job(
     image_count: int,
     owner: str,
     parent_job_id: str | None = None,
+    alcohol_as_carbs: bool = True,
 ) -> None:
     ts = now_ms()
     _exec(
         """INSERT INTO jobs (id, client_job_id, parent_job_id, status, prompt_text,
-                             threshold_mode, threshold_value, image_count, owner,
-                             created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                             threshold_mode, threshold_value, alcohol_as_carbs,
+                             image_count, owner, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             job_id,
             client_job_id,
@@ -170,6 +179,7 @@ def create_job(
             prompt_text,
             threshold_mode,
             threshold_value,
+            1 if alcohol_as_carbs else 0,
             image_count,
             owner,
             ts,
@@ -320,6 +330,9 @@ def job_to_api(job: dict[str, Any], include_events: bool = False) -> dict[str, A
         "prompt_text": job["prompt_text"],
         "threshold_mode": job["threshold_mode"],
         "threshold_value": job["threshold_value"],
+        "alcohol_as_carbs": bool(
+            job["alcohol_as_carbs"] if "alcohol_as_carbs" in job.keys() else 1
+        ),
         "image_count": job["image_count"],
         "revision": job["revision"],
         "error": job["error"],

@@ -286,6 +286,7 @@ object AiClient {
             .addFormDataPart("text", text)
             .addFormDataPart("threshold_mode", thresholdMode)
             .addFormDataPart("threshold_value", thresholdValue.toString())
+            .addFormDataPart("alcohol_as_carbs", settings.alcoholAsCarbs.toString())
             .addFormDataPart("client_job_id", clientJobId)
             .apply {
                 images.forEachIndexed { index, file ->
@@ -369,6 +370,7 @@ object AiClient {
             .addFormDataPart("text", text)
             .addFormDataPart("threshold_mode", thresholdMode)
             .addFormDataPart("threshold_value", thresholdValue.toString())
+            .addFormDataPart("alcohol_as_carbs", settings.alcoholAsCarbs.toString())
             .addFormDataPart("client_job_id", clientJobId)
             .build()
         return execute(

@@ -86,4 +86,12 @@ https://kevroy314.github.io/Macro/privacy-policy
 
 ## License
 
-Open source — see repository for details.
+[PolyForm Noncommercial License 1.0.0](LICENSE) — Copyright © 2026 Kevin Horecka.
+
+Use it, change it, share it, run your own server, for any noncommercial purpose.
+Personal, household, hobby, research, education and charitable use are all fine,
+including running the AI daemon on hardware you pay for. Selling it, or building a
+commercial product or service on it, needs a separate agreement.
+
+This is source-available rather than OSI open source: the noncommercial restriction is
+precisely what OSI approval excludes, so the honest label is the one used here.

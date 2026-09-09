@@ -242,6 +242,9 @@ class JobRunner:
                 today=date.today().isoformat(),
                 threshold_mode=job["threshold_mode"],
                 threshold_value=job["threshold_value"],
+                alcohol_as_carbs=bool(
+                    job["alcohol_as_carbs"] if "alcohol_as_carbs" in job.keys() else 1
+                ),
             )
             resume_session = None
 

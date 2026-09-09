@@ -341,6 +341,35 @@ class MacroRepository(
 
     suspend fun saveWidgetSettings(settings: WidgetSettings) = widgetSettingsDao.upsert(settings)
 
+    /**
+     * Whether to show the first-run walkthrough.
+     *
+     * The 15→16 migration marks existing installs as having seen it, since migrations
+     * only run on upgrade. That covers everyone with a settings row — but a long-time
+     * user who never opened Settings has no row to migrate, and a bare flag check
+     * would show them a "welcome, here's how to start" tour over months of their own
+     * data. So anyone with data already is treated as having seen it, and the flag is
+     * written so this is decided once.
+     */
+    suspend fun shouldShowOnboarding(): Boolean {
+        val settings = widgetSettingsDao.getSettings()
+        if (settings?.onboardingSeen == true) return false
+
+        val hasHistory = dailyMacroDao.getAll().isNotEmpty() ||
+            presetDao.getAll().isNotEmpty() ||
+            targetDao.getTarget() != null
+        if (hasHistory) {
+            markOnboardingSeen()
+            return false
+        }
+        return true
+    }
+
+    suspend fun markOnboardingSeen() {
+        val current = widgetSettingsDao.getSettings() ?: WidgetSettings()
+        widgetSettingsDao.upsert(current.copy(onboardingSeen = true))
+    }
+
     // Sync Settings
     fun getSyncSettingsFlow(): Flow<SyncSettings?> = syncSettingsDao.getSettingsFlow()
 

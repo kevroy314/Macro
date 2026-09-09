@@ -128,7 +128,7 @@ except `/api/v1/health`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/v1/jobs` | multipart: `text`, `images`, `threshold_mode`, `threshold_value`, `client_job_id` |
+| `POST` | `/api/v1/jobs` | multipart: `text`, `images`, `threshold_mode`, `threshold_value`, `alcohol_as_carbs`, `client_job_id` |
 | `GET` | `/api/v1/jobs?updated_since=&limit=` | incremental poll |
 | `GET` | `/api/v1/jobs/{id}` | full detail, events, answers, steps |
 | `POST` | `/api/v1/jobs/{id}/answers` | `{"answers":[{"question_id","answer"}]}` — resumes the same session |
@@ -154,6 +154,12 @@ except `/api/v1/health`.
 | `POST` | `/api/v1/preset-tags` | background search-tagging for presets |
 | `GET` | `/api/v1/health` | unauthenticated liveness |
 | `GET` | `/` | web job log (see below) |
+
+`alcohol_as_carbs` (default true) tells the agent to convert a drink's alcohol calories
+into carbohydrate grams at 4 kcal/g and add them to the carbs figure. Alcohol is 7
+calories per gram and is none of protein, carbohydrate or fat, so without it two drinks
+disappear from a day's totals entirely. It is stored per job, so a follow-up answer or a
+correction is judged by the same rule the original estimate used.
 
 Jobs and threads both carry `progress`, the step in flight, and `steps`, everything
 they have done. A planning thread's steps move onto the reply that produced them once

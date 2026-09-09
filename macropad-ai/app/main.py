@@ -205,6 +205,7 @@ async def create_job(
     text: str = Form(default=""),
     threshold_mode: str = Form(default="percent"),
     threshold_value: float = Form(default=10.0),
+    alcohol_as_carbs: bool = Form(default=True),
     client_job_id: str | None = Form(default=None),
     images: list[UploadFile] | None = File(default=None),
 ) -> dict[str, Any]:
@@ -243,6 +244,7 @@ async def create_job(
         prompt_text=text,
         threshold_mode=threshold_mode,
         threshold_value=threshold_value,
+        alcohol_as_carbs=alcohol_as_carbs,
         image_count=stored,
         owner=user.id,
     )
@@ -386,6 +388,10 @@ async def retry_job(
         image_count=stored,
         owner=user.id,
         parent_job_id=job_id,
+        # Inherit the rule the original ran under, so a re-run is comparable.
+        alcohol_as_carbs=bool(
+            job["alcohol_as_carbs"] if "alcohol_as_carbs" in job.keys() else 1
+        ),
     )
     db.set_status(job_id, db.STATUS_SUPERSEDED, f"replaced by {new_id}")
     runner.submit(new_id)

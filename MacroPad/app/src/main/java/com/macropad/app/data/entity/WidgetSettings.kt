@@ -20,5 +20,15 @@ data class WidgetSettings(
 
     // Day reset hour (0-23, default 0 = midnight)
     // If set to 5, the day resets at 5am instead of midnight
-    val dayResetHour: Int = 0
+    val dayResetHour: Int = 0,
+
+    /**
+     * Whether the first-run walkthrough has been shown.
+     *
+     * False by default so a fresh install sees it; the 15→16 migration sets it true
+     * for everyone already using the app, because migrations run on upgrade and never
+     * on a first install. See also [MacroRepository.shouldShowOnboarding], which
+     * covers the case of an existing user who never had a settings row to migrate.
+     */
+    val onboardingSeen: Boolean = false
 )

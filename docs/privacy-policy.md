@@ -104,7 +104,8 @@ We may update this Privacy Policy from time to time. Changes will be reflected i
 
 ## Open Source
 
-MacroPad is open source. You can review the complete source code at:
+MacroPad's source is public and you can review all of it. It is licensed for
+noncommercial use — see LICENSE in the repository.
 https://github.com/kevroy314/Macro
 
 ## Contact

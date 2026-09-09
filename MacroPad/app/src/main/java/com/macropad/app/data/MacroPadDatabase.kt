@@ -46,7 +46,7 @@ import com.macropad.app.data.entity.WidgetSettings
         AiThread::class,
         AiThreadMessage::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class MacroPadDatabase : RoomDatabase() {
@@ -308,6 +308,21 @@ abstract class MacroPadDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Count alcohol as carbohydrate, and remember whether the walkthrough was shown.
+         *
+         * `onboardingSeen` is set to 1 here on purpose. A migration only runs on an
+         * upgrade, never on a fresh install, so this is exactly the line that stops
+         * everyone already using the app from being shown a first-run tour.
+         */
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ai_settings ADD COLUMN alcoholAsCarbs INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE widget_settings ADD COLUMN onboardingSeen INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE widget_settings SET onboardingSeen = 1")
+            }
+        }
+
         fun getDatabase(context: Context): MacroPadDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -317,7 +332,7 @@ abstract class MacroPadDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
                 )
                 // Deliberately NOT fallbackToDestructiveMigration(). This database is
                 // the only copy of months of the user's food log; a migration bug

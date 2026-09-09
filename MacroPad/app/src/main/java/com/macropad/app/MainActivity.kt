@@ -182,6 +182,11 @@ fun MainScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val application = LocalContext.current.applicationContext as MacroPadApplication
+    // Decided once, before anything is drawn, so the tour never flashes over the
+    // dashboard of someone who has been using this for months.
+    var onboarding by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) { onboarding = repository.shouldShowOnboarding() }
+
     var updateAvailable by remember { mutableStateOf(false) }
 
     // On every resume, not once per composition. A warm start does not re-run
@@ -268,6 +273,33 @@ fun MainScreen(
             IncrementWidget().updateAll(context)
             PresetWidget.forceUpdateAll(context)
         }
+    }
+
+    // Nothing else is drawn until we know, and the walkthrough replaces the app
+    // rather than floating over it — it asks for a home-screen widget, which is
+    // hard to do while a dialog is in the way.
+    if (onboarding == null) return
+    if (onboarding == true) {
+        GettingStartedScreen(
+            onFinish = {
+                scope.launch { repository.markOnboardingSeen() }
+                onboarding = false
+            },
+            onOpenSettings = {
+                pendingRoute.value = Screen.Settings.route
+            },
+            onOpenAiSetup = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://kevroy314.github.io/Macro/self-hosting")
+                        )
+                    )
+                }
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -634,6 +666,7 @@ fun MainScreen(
                             )
                         )
                     },
+                    onShowGettingStarted = { onboarding = true },
                     onDismissWhatsNew = {
                         scope.launch {
                             val settings = repository.getAiSettings()

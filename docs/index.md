@@ -16,6 +16,14 @@ Add protein, carbs, and fat with just a tap. No complicated food databases or ba
 - **Increment Widget**: Quick +/- buttons right on your home screen
 - **Preset Widget**: Apply saved meals with one tap
 
+### Getting Started
+A short walkthrough on first launch — widgets, what's worth logging, and the two
+settings that matter. Reachable again any time from Settings.
+
+### Counts Alcohol Properly
+Alcohol is 7 calories a gram and is none of protein, carbs or fat, so most trackers let
+it vanish. MacroPad counts it as carbs by default, so a couple of drinks still show up.
+
 ### Smart Day Reset
 Night owl? Set your day to reset at 4am instead of midnight. Your macros follow YOUR schedule.
 
@@ -79,4 +87,7 @@ Found a bug or have a feature request? [Open an issue on GitHub](https://github.
 - [Setting up the AI Estimator](self-hosting.md)
 - [Contributing](https://github.com/kevroy314/Macro/blob/main/CONTRIBUTING.md)
 
-MacroPad is open source software released under the MIT License.
+MacroPad's source is public, under the
+[PolyForm Noncommercial License 1.0.0](https://github.com/kevroy314/Macro/blob/main/LICENSE):
+use it, change it, share it, run your own server — for anything noncommercial. Selling
+it, or building a paid product on it, needs a separate agreement.
