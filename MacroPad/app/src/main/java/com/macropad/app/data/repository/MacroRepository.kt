@@ -30,6 +30,7 @@ import com.macropad.app.data.entity.SyncSettings
 import com.macropad.app.data.entity.WidgetSettings
 import com.macropad.app.sync.BackupData
 import com.macropad.app.sync.BackupMerge
+import com.macropad.app.ui.PresetOrder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -512,28 +513,10 @@ class MacroRepository(
         presets: List<MacroPreset>,
         uses: Map<Long, Int>,
         settings: PresetDisplaySettings
-    ): List<MacroPreset> {
-        val ordered = when (settings.sortMode) {
-            PresetSortMode.ALPHABETICAL ->
-                presets.sortedBy { it.name.lowercase() }
-            PresetSortMode.MANUAL ->
-                presets.sortedWith(compareBy({ it.sortOrder }, { it.name.lowercase() }))
-            PresetSortMode.MOST_USED_WEEK ->
-                // Unused presets keep alphabetical order rather than shuffling around.
-                presets.sortedWith(
-                    compareByDescending<MacroPreset> { uses[it.id] ?: 0 }
-                        .thenByDescending { it.lastUsedAt }
-                        .thenBy { it.name.lowercase() }
-                )
-            PresetSortMode.RECENTLY_USED ->
-                presets.sortedWith(
-                    compareByDescending<MacroPreset> { it.lastUsedAt }
-                        .thenBy { it.name.lowercase() }
-                )
-        }
-        if (!settings.splitAiAndManual) return ordered
-        val (ai, manual) = ordered.partition { it.isAi }
-        return if (settings.aiOnTop) ai + manual else manual + ai
+    ): List<MacroPreset> = PresetOrder.sort(presets, uses, settings)
+
+    suspend fun setPresetPinned(presetId: Long, pinned: Boolean) {
+        presetDao.updatePinned(presetId, pinned)
     }
 
     suspend fun getUntaggedPresets(): List<MacroPreset> = presetDao.getUntagged()

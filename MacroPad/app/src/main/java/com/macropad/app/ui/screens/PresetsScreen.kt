@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +27,7 @@ fun PresetsScreen(
     displaySettingsFlow: Flow<PresetDisplaySettings?>,
     onSavePreset: (MacroPreset) -> Unit,
     onDeletePreset: (MacroPreset) -> Unit,
+    onTogglePinned: (MacroPreset) -> Unit = {},
     onApplyPreset: (MacroPreset) -> Unit,
     onSaveDisplaySettings: (PresetDisplaySettings) -> Unit,
     onReorder: (List<Long>) -> Unit,
@@ -145,6 +148,7 @@ fun PresetsScreen(
                         onApply = { onApplyPreset(preset) },
                         onEdit = { editingPreset = preset },
                         onDelete = { onDeletePreset(preset) },
+                        onTogglePinned = { onTogglePinned(preset) },
                         onMove = { delta ->
                             val reordered = visiblePresets.map { it.id }.toMutableList()
                             val target = index + delta
@@ -196,6 +200,7 @@ fun PresetCard(
     onApply: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onTogglePinned: () -> Unit,
     showReorderControls: Boolean = false,
     canMoveUp: Boolean = false,
     canMoveDown: Boolean = false,
@@ -273,6 +278,24 @@ fun PresetCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Edit")
                     }
+                }
+                // Pin lives with the other per-preset actions rather than in the sort
+                // sheet: it is a property of this preset, not of how the list is ordered.
+                OutlinedButton(
+                    onClick = { onTogglePinned() },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (preset.pinned) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    )
+                ) {
+                    Icon(
+                        if (preset.pinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = if (preset.pinned) "Unpin" else "Pin to top",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
                 OutlinedButton(
                     onClick = { showDeleteConfirm = true },

@@ -39,6 +39,9 @@ interface MacroPresetDao {
     @Query("UPDATE macro_presets SET searchTags = :tags WHERE id = :id")
     suspend fun updateSearchTags(id: Long, tags: String)
 
+    @Query("UPDATE macro_presets SET pinned = :pinned WHERE id = :id")
+    suspend fun updatePinned(id: Long, pinned: Boolean)
+
     @Query("SELECT * FROM macro_presets WHERE searchTags = ''")
     suspend fun getUntagged(): List<MacroPreset>
 

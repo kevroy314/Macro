@@ -23,7 +23,16 @@ data class MacroPreset(
      * Generated in the background by the daemon so that searching by meaning costs
      * nothing at the keystroke.
      */
-    val searchTags: String = ""
+    val searchTags: String = "",
+
+    /**
+     * Kept at the top of the list, whatever the sort mode.
+     *
+     * Sorting answers "what have I been eating"; pinning answers "what do I reach for".
+     * Those are different questions, so a pin outranks the sort rather than being
+     * another sort mode.
+     */
+    val pinned: Boolean = false
 ) {
     val calories: Int
         get() = (proteinG * 4) + (carbsG * 4) + (fatG * 9)

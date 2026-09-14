@@ -268,14 +268,7 @@ fun MainScreen(
         )
     }
 
-    // Notification taps and the AI Add widget both arrive as a requested route.
     val requestedRoute by pendingRoute.collectAsState()
-    LaunchedEffect(requestedRoute) {
-        requestedRoute?.let { route ->
-            navController.navigate(route) { launchSingleTop = true }
-            pendingRoute.value = null
-        }
-    }
 
     fun updateWidgets() {
         scope.launch {
@@ -323,6 +316,17 @@ fun MainScreen(
             }
         )
         return
+    }
+
+    // Deliberately after the onboarding gate. The first composition always has
+    // onboarding == null and returns before NavHost is composed, so an effect
+    // declared above it would call navigate() on a controller with no graph — which
+    // is what made the AI Add widget bounce straight back out of the app.
+    LaunchedEffect(requestedRoute) {
+        requestedRoute?.let { route ->
+            navController.navigate(route) { launchSingleTop = true }
+            pendingRoute.value = null
+        }
     }
 
     Scaffold(
@@ -464,6 +468,12 @@ fun MainScreen(
             composable(Screen.Presets.route) {
                 PresetsScreen(
                     presetsFlow = repository.getSortedPresetsFlow(),
+                    onTogglePinned = { preset ->
+                        scope.launch {
+                            repository.setPresetPinned(preset.id, !preset.pinned)
+                            PresetWidget.forceUpdateAll(context)
+                        }
+                    },
                     displaySettingsFlow = repository.getPresetDisplaySettingsFlow(),
                     onSavePreset = { preset ->
                         scope.launch {
