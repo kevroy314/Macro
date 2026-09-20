@@ -21,15 +21,15 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MainActivity
 import com.macropad.app.MacroPadApplication
+import com.macropad.app.ui.theme.WidgetPalette
 import com.macropad.app.data.entity.DailyMacro
 import com.macropad.app.data.entity.MacroTarget
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 // Widget colors matching the app theme
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetTextMuted = Color(0xFF9CA3AF)
-private val WidgetAccent = Color(0xFFA78BFA)
+// Macro colours stay fixed: protein is green everywhere in this app, and recolouring
+// them by theme would make the bars meaningless.
 private val WidgetGreen = Color(0xFF4ADE80)
 private val WidgetCyan = Color(0xFF22D3EE)
 private val WidgetGold = Color(0xFFFBBF24)
@@ -49,11 +49,13 @@ class MacroStatusWidget : GlanceAppWidget() {
     // Use PreferencesGlanceStateDefinition to enable state-based updates
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
+    // Shaped around where these actually sit. One launcher cell is the common case
+    // and used to be impossible — the widget declared a two-cell minimum.
     override val sizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(120.dp, 48.dp),   // Horizontal compact band
-            DpSize(180.dp, 48.dp),   // Horizontal with more space
-            DpSize(120.dp, 120.dp),  // Square layout
+            DpSize(56.dp, 56.dp),    // a single icon slot
+            DpSize(120.dp, 56.dp),   // two wide, one tall
+            DpSize(180.dp, 110.dp),  // room for words
         )
     )
 
@@ -84,6 +86,8 @@ class MacroStatusWidget : GlanceAppWidget() {
             }
         }
 
+        val palette = widgetPalette(context)
+
         provideContent {
             // Read from the widget's preferences state
             val prefs = currentState<Preferences>()
@@ -108,10 +112,12 @@ class MacroStatusWidget : GlanceAppWidget() {
             )
 
             val size = LocalSize.current
-            if (size.height < 80.dp) {
-                MacroStatusHorizontalContent(displayMacros, displayTarget)
-            } else {
-                MacroStatusVerticalContent(displayMacros, displayTarget)
+            when {
+                // One cell: all four numbers stacked, nothing else. Four short rows
+                // fit where four columns do not.
+                size.width < 100.dp -> MacroStatusTinyContent(displayMacros, palette)
+                size.height < 90.dp -> MacroStatusHorizontalContent(displayMacros, displayTarget, palette)
+                else -> MacroStatusVerticalContent(displayMacros, displayTarget, palette)
             }
         }
     }
@@ -164,27 +170,83 @@ class MacroStatusWidget : GlanceAppWidget() {
     }
 }
 
+/**
+ * One launcher cell: four numbers and nothing else.
+ *
+ * Padding is 2dp rather than the 8dp the larger layouts use. At this size the padding
+ * was the difference between four rows fitting and three — the numbers are the whole
+ * content, so the margin is what gives way.
+ */
 @Composable
-fun MacroStatusHorizontalContent(macros: DailyMacro, target: MacroTarget) {
+fun MacroStatusTinyContent(macros: DailyMacro, palette: WidgetPalette.Palette) {
+    Column(
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(ColorProvider(palette.background))
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .clickable(actionStartActivity<MainActivity>()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TinyRow("P", macros.proteinG, WidgetGreen, palette)
+        TinyRow("C", macros.carbsG, WidgetCyan, palette)
+        TinyRow("F", macros.fatG, WidgetGold, palette)
+        Text(
+            text = "${macros.calories}",
+            style = TextStyle(
+                color = ColorProvider(palette.text),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+        )
+    }
+}
+
+@Composable
+private fun TinyRow(
+    label: String,
+    value: Int,
+    accent: Color,
+    palette: WidgetPalette.Palette
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = TextStyle(color = ColorProvider(accent), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        )
+        Spacer(modifier = GlanceModifier.width(3.dp))
+        Text(
+            text = "$value",
+            style = TextStyle(color = ColorProvider(palette.text), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        )
+    }
+}
+
+@Composable
+fun MacroStatusHorizontalContent(
+    macros: DailyMacro,
+    target: MacroTarget,
+    palette: WidgetPalette.Palette
+) {
     Row(
         modifier = GlanceModifier
             .fillMaxSize()
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .background(ColorProvider(WidgetBackground))
+            .background(ColorProvider(palette.background))
             .clickable(actionStartActivity<MainActivity>()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Protein
-        MacroCompact("P", macros.proteinG, target.proteinG, WidgetGreen)
+        MacroCompact("P", macros.proteinG, target.proteinG, WidgetGreen, palette)
         Spacer(modifier = GlanceModifier.width(6.dp))
 
         // Carbs
-        MacroCompact("C", macros.carbsG, target.carbsG, WidgetCyan)
+        MacroCompact("C", macros.carbsG, target.carbsG, WidgetCyan, palette)
         Spacer(modifier = GlanceModifier.width(6.dp))
 
         // Fat
-        MacroCompact("F", macros.fatG, target.fatG, WidgetGold)
+        MacroCompact("F", macros.fatG, target.fatG, WidgetGold, palette)
         Spacer(modifier = GlanceModifier.width(6.dp))
 
         // Calories
@@ -200,7 +262,13 @@ fun MacroStatusHorizontalContent(macros: DailyMacro, target: MacroTarget) {
 }
 
 @Composable
-fun MacroCompact(label: String, current: Int, target: Int, color: Color) {
+fun MacroCompact(
+    label: String,
+    current: Int,
+    target: Int,
+    color: Color,
+    palette: WidgetPalette.Palette
+) {
     val isOver = current > target
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
@@ -208,7 +276,7 @@ fun MacroCompact(label: String, current: Int, target: Int, color: Color) {
         Text(
             text = label,
             style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
+                color = ColorProvider(palette.textMuted),
                 fontSize = 9.sp
             )
         )
@@ -224,12 +292,16 @@ fun MacroCompact(label: String, current: Int, target: Int, color: Color) {
 }
 
 @Composable
-fun MacroStatusVerticalContent(macros: DailyMacro, target: MacroTarget) {
+fun MacroStatusVerticalContent(
+    macros: DailyMacro,
+    target: MacroTarget,
+    palette: WidgetPalette.Palette
+) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .padding(10.dp)
-            .background(ColorProvider(WidgetBackground))
+            .background(ColorProvider(palette.background))
             .clickable(actionStartActivity<MainActivity>()),
         verticalAlignment = Alignment.Top,
         horizontalAlignment = Alignment.Start
@@ -237,7 +309,7 @@ fun MacroStatusVerticalContent(macros: DailyMacro, target: MacroTarget) {
         Text(
             text = "Today",
             style = TextStyle(
-                color = ColorProvider(WidgetAccent),
+                color = ColorProvider(palette.accent),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -245,11 +317,11 @@ fun MacroStatusVerticalContent(macros: DailyMacro, target: MacroTarget) {
 
         Spacer(modifier = GlanceModifier.height(6.dp))
 
-        MacroRow("P", macros.proteinG, target.proteinG, ColorProvider(WidgetGreen))
+        MacroRow("P", macros.proteinG, target.proteinG, ColorProvider(WidgetGreen), palette)
         Spacer(modifier = GlanceModifier.height(3.dp))
-        MacroRow("C", macros.carbsG, target.carbsG, ColorProvider(WidgetCyan))
+        MacroRow("C", macros.carbsG, target.carbsG, ColorProvider(WidgetCyan), palette)
         Spacer(modifier = GlanceModifier.height(3.dp))
-        MacroRow("F", macros.fatG, target.fatG, ColorProvider(WidgetGold))
+        MacroRow("F", macros.fatG, target.fatG, ColorProvider(WidgetGold), palette)
 
         Spacer(modifier = GlanceModifier.height(6.dp))
 
@@ -270,7 +342,13 @@ fun MacroStatusVerticalContent(macros: DailyMacro, target: MacroTarget) {
 }
 
 @Composable
-fun MacroRow(label: String, current: Int, target: Int, color: ColorProvider) {
+fun MacroRow(
+    label: String,
+    current: Int,
+    target: Int,
+    color: ColorProvider,
+    palette: WidgetPalette.Palette
+) {
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         horizontalAlignment = Alignment.Start,
@@ -279,7 +357,7 @@ fun MacroRow(label: String, current: Int, target: Int, color: ColorProvider) {
         Text(
             text = label,
             style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
+                color = ColorProvider(palette.textMuted),
                 fontSize = 11.sp
             ),
             modifier = GlanceModifier.width(20.dp)

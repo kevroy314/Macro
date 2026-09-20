@@ -2,6 +2,7 @@ package com.macropad.app.data.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.macropad.app.ui.theme.WidgetPalette
 
 @Entity(tableName = "widget_settings")
 data class WidgetSettings(
@@ -30,5 +31,13 @@ data class WidgetSettings(
      * on a first install. See also [MacroRepository.shouldShowOnboarding], which
      * covers the case of an existing user who never had a settings row to migrate.
      */
-    val onboardingSeen: Boolean = false
+    val onboardingSeen: Boolean = false,
+
+    // ---- appearance -------------------------------------------------------
+    /** One accent for the app and the widgets, so they cannot drift apart. */
+    val accentColor: Int = WidgetPalette.DEFAULT_ACCENT,
+    /** ARGB including alpha. Defaults to fully transparent. */
+    val widgetBackgroundColor: Int = WidgetPalette.DEFAULT_BACKGROUND,
+    /** [WidgetPalette.TEXT_AUTO] means work it out from the background. */
+    val widgetTextColor: Int = WidgetPalette.TEXT_AUTO
 )

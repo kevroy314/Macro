@@ -46,7 +46,7 @@ import com.macropad.app.data.entity.WidgetSettings
         AiThread::class,
         AiThreadMessage::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class MacroPadDatabase : RoomDatabase() {
@@ -330,6 +330,22 @@ abstract class MacroPadDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * A configurable accent and widget background.
+         *
+         * Defaults are written as literals rather than referencing WidgetPalette: a
+         * migration has to keep producing the same schema forever, and a constant that
+         * someone later edits would quietly change what old databases migrate to.
+         */
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // -6517766 is 0xFFA78BFA, the accent the app shipped with.
+                db.execSQL("ALTER TABLE widget_settings ADD COLUMN accentColor INTEGER NOT NULL DEFAULT -5796870")
+                db.execSQL("ALTER TABLE widget_settings ADD COLUMN widgetBackgroundColor INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE widget_settings ADD COLUMN widgetTextColor INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): MacroPadDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -339,7 +355,7 @@ abstract class MacroPadDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18
                 )
                 // Deliberately NOT fallbackToDestructiveMigration(). This database is
                 // the only copy of months of the user's food log; a migration bug

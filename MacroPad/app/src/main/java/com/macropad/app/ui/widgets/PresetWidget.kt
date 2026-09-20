@@ -24,6 +24,7 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MainActivity
 import com.macropad.app.MacroPadApplication
+import com.macropad.app.ui.theme.WidgetPalette
 import com.macropad.app.data.entity.MacroPreset
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -31,10 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // Widget colors matching the app theme
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetTextMuted = Color(0xFF9CA3AF)
-private val WidgetAccent = Color(0xFFA78BFA)
-private val WidgetSurface = Color(0xFF1A1A1A)
+
 
 // Key for storing preset data in widget preferences
 private val KEY_PRESETS_JSON = stringPreferencesKey("presets_json")
@@ -69,6 +67,8 @@ class PresetWidget : GlanceAppWidget() {
             }
         }
 
+        val palette = widgetPalette(context)
+
         provideContent {
             // Read from the widget's preferences state
             val prefs = currentState<Preferences>()
@@ -84,7 +84,7 @@ class PresetWidget : GlanceAppWidget() {
                 presets
             }
 
-            PresetWidgetContent(displayPresets)
+            PresetWidgetContent(displayPresets, palette)
         }
     }
 
@@ -128,19 +128,19 @@ class PresetWidget : GlanceAppWidget() {
 }
 
 @Composable
-fun PresetWidgetContent(presets: List<MacroPreset>) {
+fun PresetWidgetContent(presets: List<MacroPreset>, palette: WidgetPalette.Palette) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .padding(8.dp)
-            .background(ColorProvider(WidgetBackground)),
+            .background(ColorProvider(palette.background)),
         verticalAlignment = Alignment.Top,
         horizontalAlignment = Alignment.Start
     ) {
         Text(
             text = "Presets",
             style = TextStyle(
-                color = ColorProvider(WidgetAccent),
+                color = ColorProvider(palette.accent),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -160,7 +160,7 @@ fun PresetWidgetContent(presets: List<MacroPreset>) {
                 Text(
                     text = "No presets - tap to add",
                     style = TextStyle(
-                        color = ColorProvider(WidgetTextMuted),
+                        color = ColorProvider(palette.textMuted),
                         fontSize = 11.sp
                     )
                 )
@@ -172,7 +172,7 @@ fun PresetWidgetContent(presets: List<MacroPreset>) {
             ) {
                 items(presets, itemId = { it.id }) { preset ->
                     Column {
-                        PresetButton(preset)
+                        PresetButton(preset, palette)
                         Spacer(modifier = GlanceModifier.height(4.dp))
                     }
                 }
@@ -182,13 +182,13 @@ fun PresetWidgetContent(presets: List<MacroPreset>) {
 }
 
 @Composable
-fun PresetButton(preset: MacroPreset) {
+fun PresetButton(preset: MacroPreset, palette: WidgetPalette.Palette) {
     Box(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(32.dp)
             .cornerRadius(6.dp)
-            .background(ColorProvider(WidgetSurface))
+            .background(ColorProvider(palette.surface))
             .clickable(
                 actionRunCallback<ApplyPresetAction>(
                     actionParametersOf(

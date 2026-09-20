@@ -14,8 +14,8 @@ android {
         applicationId = "com.macropad.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 54
-        versionName = "2.11.0"
+        versionCode = 55
+        versionName = "2.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -258,6 +258,16 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val appearance by widgetSettingsFlow.collectAsState(initial = null)
+        appearance?.let { ws ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) {
+                    AppearanceCard(settings = ws, onSave = onSaveWidgetSettings)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Its own card on purpose. This lived inside the AI card's expanded section,
         // where it was invisible unless you happened to tap that card open.
         val aiForAlcohol by aiSettingsFlow.collectAsState(initial = null)

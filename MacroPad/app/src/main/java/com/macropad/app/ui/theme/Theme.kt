@@ -3,6 +3,7 @@ package com.macropad.app.ui.theme
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
@@ -61,9 +62,19 @@ private val MacroPadColorScheme = darkColorScheme(
 
 @Composable
 fun MacroPadTheme(
+    accent: Color = Color(WidgetPalette.DEFAULT_ACCENT),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = MacroPadColorScheme
+    // The accent the user picked, applied everywhere the purple used to be hardcoded,
+    // so the app and the widgets cannot end up different colours.
+    val colorScheme = remember(accent) {
+        MacroPadColorScheme.copy(
+            primary = accent,
+            primaryContainer = accent,
+            secondary = accent,
+            tertiary = accent
+        )
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {

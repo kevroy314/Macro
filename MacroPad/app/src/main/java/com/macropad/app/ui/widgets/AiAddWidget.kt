@@ -10,6 +10,8 @@ import androidx.glance.GlanceModifier
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.compose.ui.unit.DpSize
+import androidx.glance.LocalSize
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
@@ -29,9 +31,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MainActivity
 
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetAccent = Color(0xFFA78BFA)
-private val WidgetSurface = Color(0xFF1A1A1A)
+
 private val WidgetTextMuted = Color(0xFF9CA3AF)
 
 /**
@@ -40,15 +40,26 @@ private val WidgetTextMuted = Color(0xFF9CA3AF)
  */
 class AiAddWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Exact
+    // One cell is the common case, so it gets a layout of its own rather than a
+    // two-cell layout squeezed until the label wraps.
+    override val sizeMode = SizeMode.Responsive(
+        setOf(
+            DpSize(56.dp, 56.dp),
+            DpSize(120.dp, 56.dp)
+        )
+    )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val palette = widgetPalette(context)
+
         provideContent {
+            val compact = LocalSize.current.width < 100.dp
+
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .padding(8.dp)
-                    .background(ColorProvider(WidgetBackground))
+                    .padding(if (compact) 2.dp else 8.dp)
+                    .background(ColorProvider(palette.background))
                     .clickable(actionRunCallback<OpenAiEntryAction>()),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -56,24 +67,31 @@ class AiAddWidget : GlanceAppWidget() {
                 Box(
                     modifier = GlanceModifier
                         .cornerRadius(10.dp)
-                        .background(ColorProvider(WidgetSurface))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .background(ColorProvider(palette.surface))
+                        .padding(
+                            horizontal = if (compact) 10.dp else 14.dp,
+                            vertical = if (compact) 8.dp else 10.dp
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "AI Add",
+                        // At one cell the word "Add" is the button; "AI Add" plus a
+                        // subtitle simply does not fit and wraps into nonsense.
+                        text = if (compact) "AI" else "AI Add",
                         style = TextStyle(
-                            color = ColorProvider(WidgetAccent),
-                            fontSize = 15.sp,
+                            color = ColorProvider(palette.accent),
+                            fontSize = if (compact) 16.sp else 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )
                 }
-                Spacer(modifier = GlanceModifier.height(6.dp))
-                Text(
-                    text = "Photo + note",
-                    style = TextStyle(color = ColorProvider(WidgetTextMuted), fontSize = 11.sp)
-                )
+                if (!compact) {
+                    Spacer(modifier = GlanceModifier.height(6.dp))
+                    Text(
+                        text = "Photo + note",
+                        style = TextStyle(color = ColorProvider(palette.textMuted), fontSize = 11.sp)
+                    )
+                }
             }
         }
     }

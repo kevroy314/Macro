@@ -50,9 +50,14 @@ import com.macropad.app.data.repository.MacroRepository
 import com.macropad.app.net.AiCallResult
 import com.macropad.app.net.AiClient
 import com.macropad.app.ui.screens.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
+import com.macropad.app.ui.theme.WidgetPalette
 import com.macropad.app.ui.theme.MacroPadTheme
 import com.macropad.app.ui.widgets.IncrementWidget
 import com.macropad.app.ui.widgets.MacroStatusWidget
+import com.macropad.app.ui.widgets.AiAddWidget
 import com.macropad.app.ui.widgets.PresetWidget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -94,7 +99,11 @@ class MainActivity : ComponentActivity() {
         pendingSetup.value = SetupLink.decode(intent?.dataString)
 
         setContent {
-            MacroPadTheme {
+            val widgetSettings by repository.getWidgetSettingsFlow()
+                .collectAsState(initial = null)
+            val accent = Color(widgetSettings?.accentColor ?: WidgetPalette.DEFAULT_ACCENT)
+
+            MacroPadTheme(accent = accent) {
                 MainScreen(
                     repository,
                     aiSyncManager,
@@ -276,6 +285,9 @@ fun MainScreen(
             MacroStatusWidget.forceUpdateAll(context)
             IncrementWidget().updateAll(context)
             PresetWidget.forceUpdateAll(context)
+            // The AI widget has no data of its own, but it does follow the accent and
+            // background, so an appearance change has to reach it too.
+            AiAddWidget().updateAll(context)
         }
     }
 
