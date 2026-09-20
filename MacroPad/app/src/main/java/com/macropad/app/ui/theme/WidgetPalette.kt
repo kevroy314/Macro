@@ -32,6 +32,16 @@ object WidgetPalette {
      */
     private const val OPAQUE_ENOUGH = 0.45f
 
+    /**
+     * Where black text stops being the more readable choice and white text starts.
+     *
+     * Not 0.5. Contrast against white is 1.05 / (L + 0.05) and against black is
+     * (L + 0.05) / 0.05; those cross at L = 0.179, well below the midpoint. Splitting
+     * at 0.5 hands white text to mid-tone colours — the app's own purple among them —
+     * where black is nearly three times the contrast.
+     */
+    private const val TEXT_FLIP = 0.179f
+
     data class Palette(
         val accent: Color,
         val background: Color,
@@ -39,7 +49,9 @@ object WidgetPalette {
         /** Secondary text — labels, units. The main colour, faded toward the ground. */
         val textMuted: Color,
         /** Chips and bar tracks. Derived so it works on any background. */
-        val surface: Color
+        val surface: Color,
+        /** What reads legibly on top of a solid accent fill. */
+        val onAccent: Color
     )
 
     fun of(
@@ -62,7 +74,11 @@ object WidgetPalette {
             // Tied to the text rather than the background: on a transparent widget the
             // background contributes nothing, and a chip has to be visible against
             // whatever is actually behind it.
-            surface = text.copy(alpha = 0.12f)
+            surface = text.copy(alpha = 0.12f),
+            // The accent is always opaque, so its own luminance decides this — the
+            // system theme has no say. A pale accent with pale text on it is the one
+            // combination that makes a button unreadable.
+            onAccent = autoTextColor(accentArgb or (0xFF shl 24), systemDark)
         )
     }
 
@@ -77,7 +93,7 @@ object WidgetPalette {
         if (alpha < OPAQUE_ENOUGH) {
             return if (systemDark) LIGHT_TEXT else DARK_TEXT
         }
-        return if (relativeLuminance(backgroundArgb) > 0.5f) DARK_TEXT else LIGHT_TEXT
+        return if (relativeLuminance(backgroundArgb) > TEXT_FLIP) DARK_TEXT else LIGHT_TEXT
     }
 
     /** WCAG relative luminance, so "is this light" matches how an eye sees it. */

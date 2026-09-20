@@ -2,7 +2,6 @@ package com.macropad.app.ui.widgets
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -32,8 +31,6 @@ import androidx.glance.unit.ColorProvider
 import com.macropad.app.MainActivity
 
 
-private val WidgetTextMuted = Color(0xFF9CA3AF)
-
 /**
  * One-tap shortcut into the AI entry form. Deliberately does nothing else: the point
  * is to get from "I'm looking at this meal" to the camera in a single press.
@@ -50,28 +47,40 @@ class AiAddWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val palette = widgetPalette(context)
+        val storedPalette = widgetPalette(context)
 
         provideContent {
+            val palette = glancePalette(storedPalette)
             val compact = LocalSize.current.width < 100.dp
 
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .padding(if (compact) 2.dp else 8.dp)
+                    // At one cell the button IS the widget, so there is nothing for an
+                    // outer margin to separate it from — the launcher already leaves a
+                    // gap between cells. Insetting again just shrank the tap target.
+                    .padding(if (compact) 0.dp else 8.dp)
                     .background(ColorProvider(palette.background))
                     .clickable(actionRunCallback<OpenAiEntryAction>()),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
-                    modifier = GlanceModifier
-                        .cornerRadius(10.dp)
-                        .background(ColorProvider(palette.surface))
-                        .padding(
-                            horizontal = if (compact) 10.dp else 14.dp,
-                            vertical = if (compact) 8.dp else 10.dp
-                        ),
+                    modifier = if (compact) {
+                        // A 12%-white chip vanishes against a dark wallpaper, and at one
+                        // cell there is nothing else on screen to say where the button
+                        // is. Filling the cell with the accent makes it read as a
+                        // launcher icon, which is how it is actually used.
+                        GlanceModifier
+                            .fillMaxSize()
+                            .cornerRadius(18.dp)
+                            .background(ColorProvider(palette.accent))
+                    } else {
+                        GlanceModifier
+                            .cornerRadius(10.dp)
+                            .background(ColorProvider(palette.surface))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -79,8 +88,8 @@ class AiAddWidget : GlanceAppWidget() {
                         // subtitle simply does not fit and wraps into nonsense.
                         text = if (compact) "AI" else "AI Add",
                         style = TextStyle(
-                            color = ColorProvider(palette.accent),
-                            fontSize = if (compact) 16.sp else 15.sp,
+                            color = ColorProvider(if (compact) palette.onAccent else palette.accent),
+                            fontSize = if (compact) 26.sp else 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )

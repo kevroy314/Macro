@@ -108,4 +108,34 @@ class WidgetPaletteTest {
         assertEquals(0, WidgetPalette.DEFAULT_BACKGROUND)
         assertEquals(0f, Color(WidgetPalette.DEFAULT_BACKGROUND).alpha, 0.001f)
     }
+
+    @Test
+    fun `text on a solid accent follows the accent, not the theme`() {
+        // The accent fills the AI button, so this is the colour of the only word on it.
+        val paleAccent = WidgetPalette.of(accentArgb = 0xFFA78BFA.toInt(), systemDark = true)
+        assertTrue("a pale accent needs dark text", !isLight(paleAccent.onAccent))
+
+        val deepAccent = WidgetPalette.of(accentArgb = 0xFF3B0764.toInt(), systemDark = false)
+        assertTrue("a deep accent needs light text", isLight(deepAccent.onAccent))
+    }
+
+    @Test
+    fun `a transparent background does not drag the accent text with it`() {
+        // onAccent must ignore the widget background entirely: the button covers it.
+        val palette = WidgetPalette.of(accentArgb = WHITE, backgroundArgb = TRANSPARENT, systemDark = true)
+        assertTrue("white button, dark text", !isLight(palette.onAccent))
+        assertTrue("but the widget's own text still follows the theme", isLight(palette.text))
+    }
+
+    @Test
+    fun `the light-dark flip happens where contrast actually crosses over`() {
+        // A mid grey: black text is 5.3 to 1 against it, white only 3.9 to 1. A naive
+        // "luminance over a half" split gets this backwards.
+        val midGrey = 0xFF808080.toInt()
+        assertTrue(WidgetPalette.relativeLuminance(midGrey) < 0.5f)
+        assertTrue("mid grey should take dark text", !isLight(WidgetPalette.autoTextColor(midGrey, systemDark = true)))
+
+        // Still light text on genuinely dark colours.
+        assertTrue(isLight(WidgetPalette.autoTextColor(0xFF2A2A3A.toInt(), systemDark = false)))
+    }
 }

@@ -67,9 +67,10 @@ class PresetWidget : GlanceAppWidget() {
             }
         }
 
-        val palette = widgetPalette(context)
+        val storedPalette = widgetPalette(context)
 
         provideContent {
+            val palette = glancePalette(storedPalette)
             // Read from the widget's preferences state
             val prefs = currentState<Preferences>()
             val storedJson = prefs[KEY_PRESETS_JSON]

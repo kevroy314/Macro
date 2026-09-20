@@ -147,9 +147,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun updateWidgetsNow() {
-        MacroStatusWidget.forceUpdateAll(this@MainActivity)
-        IncrementWidget().updateAll(this@MainActivity)
-        PresetWidget.forceUpdateAll(this@MainActivity)
+        com.macropad.app.ui.widgets.refreshAllWidgets(this@MainActivity)
     }
 
     companion object {
@@ -281,13 +279,7 @@ fun MainScreen(
 
     fun updateWidgets() {
         scope.launch {
-            // Use forceUpdateAll for MacroStatusWidget and PresetWidget to ensure state change triggers re-render
-            MacroStatusWidget.forceUpdateAll(context)
-            IncrementWidget().updateAll(context)
-            PresetWidget.forceUpdateAll(context)
-            // The AI widget has no data of its own, but it does follow the accent and
-            // background, so an appearance change has to reach it too.
-            AiAddWidget().updateAll(context)
+            com.macropad.app.ui.widgets.refreshAllWidgets(context)
         }
     }
 

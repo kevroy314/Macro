@@ -14,13 +14,12 @@ import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.macropad.app.MacroPadApplication
+import com.macropad.app.ui.theme.WidgetPalette
 import com.macropad.app.data.entity.WidgetSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // Widget colors matching the app theme
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetTextMuted = Color(0xFF9CA3AF)
 private val WidgetGreen = Color(0xFF4ADE80)
 private val WidgetGreenDim = Color(0xFF2D6B47)
 private val WidgetCyan = Color(0xFF22D3EE)
@@ -41,8 +40,11 @@ class IncrementWidget : GlanceAppWidget() {
             WidgetSettings()
         }
 
+        val storedPalette = widgetPalette(context)
+
         provideContent {
-            IncrementWidgetContent(settings)
+            val palette = glancePalette(storedPalette)
+            IncrementWidgetContent(settings, palette)
         }
     }
 
@@ -55,13 +57,13 @@ class IncrementWidget : GlanceAppWidget() {
 }
 
 @Composable
-fun IncrementWidgetContent(settings: WidgetSettings) {
+fun IncrementWidgetContent(settings: WidgetSettings, palette: WidgetPalette.Palette) {
     // Horizontal layout: P(+/-) | C(+/-) | F(+/-)
     Row(
         modifier = GlanceModifier
             .fillMaxSize()
             .padding(4.dp)
-            .background(ColorProvider(WidgetBackground)),
+            .background(ColorProvider(palette.background)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -72,7 +74,8 @@ fun IncrementWidgetContent(settings: WidgetSettings) {
             decrement = settings.proteinDecrement,
             colorUp = WidgetGreen,
             colorDown = WidgetGreenDim,
-            macroType = "protein"
+            macroType = "protein",
+            palette = palette
         )
 
         Spacer(modifier = GlanceModifier.width(4.dp))
@@ -84,7 +87,8 @@ fun IncrementWidgetContent(settings: WidgetSettings) {
             decrement = settings.carbsDecrement,
             colorUp = WidgetCyan,
             colorDown = WidgetCyanDim,
-            macroType = "carbs"
+            macroType = "carbs",
+            palette = palette
         )
 
         Spacer(modifier = GlanceModifier.width(4.dp))
@@ -96,7 +100,8 @@ fun IncrementWidgetContent(settings: WidgetSettings) {
             decrement = settings.fatDecrement,
             colorUp = WidgetGold,
             colorDown = WidgetGoldDim,
-            macroType = "fat"
+            macroType = "fat",
+            palette = palette
         )
     }
 }
@@ -108,7 +113,8 @@ fun MacroColumn(
     decrement: Int,
     colorUp: Color,
     colorDown: Color,
-    macroType: String
+    macroType: String,
+    palette: WidgetPalette.Palette
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
@@ -117,7 +123,7 @@ fun MacroColumn(
         Text(
             text = label,
             style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
+                color = ColorProvider(palette.textMuted),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Medium
             )
