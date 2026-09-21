@@ -83,16 +83,38 @@ class AiAddWidget : GlanceAppWidget() {
                     },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        // At one cell the word "Add" is the button; "AI Add" plus a
-                        // subtitle simply does not fit and wraps into nonsense.
-                        text = if (compact) "AI" else "AI Add",
-                        style = TextStyle(
-                            color = ColorProvider(if (compact) palette.onAccent else palette.accent),
-                            fontSize = if (compact) 26.sp else 15.sp,
-                            fontWeight = FontWeight.Bold
+                    if (compact) {
+                        // "AI" alone says nothing about what the button does. One cell
+                        // will not take "AI Food Add" on a line, so it breaks where the
+                        // phrase already breaks: the label, then what it acts on.
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "AI",
+                                style = TextStyle(
+                                    color = ColorProvider(palette.onAccent),
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Text(
+                                text = "Food Add",
+                                style = TextStyle(
+                                    color = ColorProvider(palette.onAccent),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "AI Food Add",
+                            style = TextStyle(
+                                color = ColorProvider(palette.accent),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
-                    )
+                    }
                 }
                 if (!compact) {
                     Spacer(modifier = GlanceModifier.height(6.dp))
